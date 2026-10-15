@@ -85,8 +85,12 @@ Route templates).
 - PROD uses `https://isp.nrs.gov.bc.ca` (`VANITY_HOST`) through the edge Route in
   `frontend/openshift.vanity-route.yml`; DEV and TEST use the generated Gold Route.
 
-Each deploy job rejects an `oc_namespace` that does not end in `-<environment>`. Missing PROD
-hostname or TLS inputs fail before backend rollout. After applying a Route, the workflow verifies
+Deployment settings live only in the GitHub Environments, because GitHub otherwise falls back
+silently to a repository- or organization-level value of the same name. A job with no environment
+fails the deployment if any database, namespace, SSO, origin or PROD hostname setting exists at
+those levels. Before backend rollout, the environment's own values must be present, its
+`oc_namespace` must end in `-<environment>`, and its SSO issuer must be that environment's
+`loginproxy` realm. Missing PROD hostname or TLS inputs also fail before backend rollout. After applying a Route, the workflow verifies
 the expected hostname and frontend Service target and waits for router admission. This does not
 establish public DNS, certificate validity or a successful SSO round trip. The [deployment setup
 instructions](../README.md#deployments) list the required Environment settings, SSO registrations

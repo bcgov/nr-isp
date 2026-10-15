@@ -127,8 +127,44 @@ env:
   OC_PROCESS_FLAGS: ${{ inputs.source_ref != '' && inputs.source_ref != github.sha && '--ignore-unknown-parameters' || '' }}
 
 jobs:
+  # GitHub gives a job its environment's secret or variable, else the repository's, else the
+  # organization's, with no sign of which. Secrets a caller passes are repository values, replaced
+  # only where the environment defines the same name. Deployment settings therefore live only in the
+  # dev, test and prod environments, and this job (which has no environment, so it sees exactly the
+  # repository and organization values) fails if any exists outside them.
+  settings:
+    name: Check deployment settings source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Reject deployment settings outside GitHub Environments
+        env:
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+          OC_TOKEN: ${{ secrets.oc_token }}
+          DATABASE_HOST: ${{ secrets.database_host }}
+          DATABASE_SERVICE_NAME: ${{ secrets.database_service_name }}
+          DATABASE_USER: ${{ secrets.database_user }}
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          KEYSTORE_SECRET: ${{ secrets.keystore_secret }}
+          ISP_OIDC_ISSUER_URI: ${{ vars.ISP_OIDC_ISSUER_URI }}
+          ISP_OIDC_CLIENT_ID: ${{ vars.ISP_OIDC_CLIENT_ID }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          VANITY_HOST: ${{ vars.VANITY_HOST }}
+          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
+          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
+          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
+        run: bash .github/scripts/check-deploy-settings.sh shared
+
   backend:
     name: Deploy (backend)
+    needs: [settings]
     environment:
       name: ${{ inputs.environment }}
       deployment: false
@@ -139,17 +175,28 @@ jobs:
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     steps:
-      # An environment secret replaces the caller's secret only when it exists. Without this check,
-      # a missing environment secret would fall back to any repository-level value of the same name.
-      - name: Validate OpenShift namespace
+      # Use this workflow's checks even when releasing a tag that predates them.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # Every value must come from this environment and belong to it: the namespace suffix and the
+      # SSO realm are checked against the environment name before anything rolls out.
+      - name: Validate environment settings
         env:
           DEPLOY_ENV: ${{ inputs.environment }}
           OC_NAMESPACE: ${{ secrets.oc_namespace }}
-        run: |
-          if [[ "$OC_NAMESPACE" != *-"$DEPLOY_ENV" ]]; then
-            echo "::error title=Wrong OpenShift namespace::oc_namespace must be the ${DEPLOY_ENV} namespace, ending in -${DEPLOY_ENV}."
-            exit 1
-          fi
+          OC_TOKEN: ${{ secrets.oc_token }}
+          OC_SERVER: ${{ vars.oc_server }}
+          DATABASE_HOST: ${{ secrets.database_host }}
+          DATABASE_SERVICE_NAME: ${{ secrets.database_service_name }}
+          DATABASE_USER: ${{ secrets.database_user }}
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          KEYSTORE_SECRET: ${{ secrets.keystore_secret }}
+          ISP_OIDC_ISSUER_URI: ${{ vars.ISP_OIDC_ISSUER_URI }}
+          ISP_OIDC_CLIENT_ID: ${{ vars.ISP_OIDC_CLIENT_ID }}
+        run: bash .github/scripts/check-deploy-settings.sh environment "$DEPLOY_ENV"
 
       - name: Validate PROD vanity Route configuration
         if: ${{ inputs.target == 'prod' }}

@@ -131,8 +131,13 @@ with a retained, previously tested tag.
 
 ### GitHub environment settings
 
-Set these on the `dev`, `test` and `prod` GitHub Environments. Keep environment credentials out of
-repository-level settings, which can otherwise supply fallback values.
+Set these on the `dev`, `test` and `prod` GitHub Environments only. GitHub silently falls back to a
+repository- or organization-level value of the same name when an environment lacks one, so a PROD
+deploy could run against TEST settings. Every deployment fails if any of these settings exists
+outside an environment, or if an environment's value is missing, has another environment's
+namespace suffix, or points at another environment's SSO realm
+(`.github/scripts/check-deploy-settings.sh`). `oc_server` and `ISP_OIDC_IDIR_HINT` are the same
+everywhere and are exempt from the repository-level check.
 
 | Setting | Kind | Notes |
 |---|---|---|
