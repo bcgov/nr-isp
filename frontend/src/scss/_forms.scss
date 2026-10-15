@@ -1,0 +1,99 @@
+// Form layouts shared by maintenance pages, ported from the CGI rebuild's index.scss and
+// lineItemRow.css.
+
+.required-asterisk {
+  color: var(--cds-text-error);
+}
+
+// "Add New Row" box: every field on one compact line that fits the viewport. Fields share the
+// width by flex ratio; a focused dropdown marked expandOnFocus grows while the others shrink.
+.add-line-item-box {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--cds-border-subtle);
+  background-color: var(--cds-layer-01);
+}
+
+.line-item-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.375rem;
+  align-items: flex-start;
+
+  .line-item-field {
+    flex: 4 1 0;
+    min-width: 0;
+    transition: flex-grow 0.2s ease;
+  }
+
+  // Numeric fields are narrower, with a floor that fits their labels.
+  .line-item-field--num {
+    flex-grow: 3;
+    min-width: 6rem;
+  }
+
+  .line-item-field--sm {
+    flex-grow: 2;
+    min-width: 4.5rem;
+  }
+
+  .line-item-field:has(.dropdown--expand-on-focus):focus-within {
+    flex-grow: 12;
+  }
+
+  // Labels truncate to one line; the field's title attribute shows the full label.
+  .cds--label {
+    display: block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Option menus open at content width even when the closed field is narrow.
+  .cds--list-box__menu {
+    min-width: max-content;
+    max-width: 26rem;
+  }
+
+  // Carbon's single date picker has a fixed 288px input; stretch it to the field instead.
+  .cds--date-picker,
+  .cds--date-picker-container,
+  .cds--date-picker-input__wrapper,
+  .cds--date-picker-input__wrapper > span {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    inline-size: 100%;
+  }
+
+  .cds--form-requirement {
+    overflow-wrap: break-word;
+    white-space: normal;
+  }
+
+  // Save and Clear buttons line up with the inputs: a hidden label reserves the label height.
+  .line-item-field--actions {
+    flex: 0 0 auto;
+    min-width: auto;
+    white-space: nowrap;
+
+    .line-item-actions-label {
+      visibility: hidden;
+    }
+
+    .line-item-actions-buttons {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      height: 2.5rem;
+    }
+  }
+}

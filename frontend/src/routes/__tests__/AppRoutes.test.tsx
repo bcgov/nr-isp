@@ -7,6 +7,10 @@ import AppRoutes from '@/routes/AppRoutes'
 vi.mock('@/service/session-service', () => ({
   fetchApiStatus: vi.fn().mockResolvedValue({ status: 'UP' }),
 }))
+vi.mock('@/service/mills-service', () => ({
+  getMills: vi.fn().mockResolvedValue([]),
+  getIspSellPriceZoneCodes: vi.fn().mockResolvedValue([]),
+}))
 
 const signedIn = authValue({ status: 'signed-in', user: approver, hasAnyRole: true })
 
@@ -77,6 +81,12 @@ describe('AppRoutes', () => {
     renderWithProviders(<AppRoutes />, { auth: signedIn, path: '/sales-summary/42' })
     expect(screen.getByRole('heading', { name: 'Sales summary' })).toBeInTheDocument()
     expect(screen.getByText(/not been ported/)).toBeInTheDocument()
+  })
+
+  it('serves ported pages in place of their placeholders', async () => {
+    renderWithProviders(<AppRoutes />, { auth: signedIn, path: '/mills' })
+    expect(await screen.findByRole('heading', { name: 'Mill Table' })).toBeInTheDocument()
+    expect(screen.queryByText(/not been ported/)).not.toBeInTheDocument()
   })
 
   it('shows not found inside the layout for unknown signed-in paths', async () => {

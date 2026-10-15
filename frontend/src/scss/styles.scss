@@ -7,6 +7,7 @@
   $theme: themes.$white
 );
 @use '@carbon/react';
+@use 'forms';
 
 @font-face {
   font-family: 'BC Sans';
@@ -101,6 +102,10 @@ body {
     font-size: 2rem;
     line-height: 1.25;
   }
+}
+
+.isp-page--wide {
+  max-width: none;
 }
 
 .isp-page__lead {

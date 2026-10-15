@@ -6,6 +6,7 @@ import { useAuth } from '@/context/auth/useAuth'
 import AuthCallback from '@/pages/AuthCallback'
 import Home from '@/pages/Home'
 import Landing from '@/pages/Landing'
+import MillsPage from '@/pages/Mills'
 import NoAccess from '@/pages/NoAccess'
 import NotFound from '@/pages/NotFound'
 import NotPorted from '@/pages/NotPorted'
@@ -14,7 +15,9 @@ import { AUTH_CALLBACK_PATH } from '@/service/oidc-service'
 import { NAVIGATION_ITEMS, isKnownAppPath } from '@/routes/navigation'
 
 /** Ported pages by navigation path. A path without an entry shows the NotPorted placeholder. */
-const PAGES: Partial<Record<string, ReactElement>> = {}
+const PAGES: Partial<Record<string, ReactElement>> = {
+  '/mills': <MillsPage />,
+}
 
 const SignedOutRoute = () => {
   const { pathname, search, hash } = useLocation()

@@ -2,8 +2,10 @@ package ca.bc.gov.nrs.isp.security;
 
 import java.util.Collection;
 import java.util.List;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.util.StringUtils;
 
 /**
@@ -30,6 +32,22 @@ public record IspUser(
             .map(GrantedAuthority::getAuthority)
             .filter(IspRoles.ALL::contains)
             .toList());
+  }
+
+  public static IspUser from(JwtAuthenticationToken authentication) {
+    return from(authentication.getToken(), authentication.getAuthorities());
+  }
+
+  /**
+   * The IDIR username for audit columns. A write without one is refused rather than recorded
+   * against nobody.
+   */
+  public String requiredUsername() {
+    if (username == null) {
+      throw new AuthenticationCredentialsNotFoundException(
+          "The access token has no IDIR username to record against this change.");
+    }
+    return username;
   }
 
   private static String claim(Jwt jwt, String name) {

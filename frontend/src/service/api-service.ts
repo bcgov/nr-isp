@@ -46,3 +46,35 @@ export const apiGetJson = async <T>(path: string): Promise<T> => {
   }
   return (await response.json()) as T
 }
+
+/**
+ * The message for a failed response. The API returns rejected input (validation, business rules,
+ * database constraints) as plain text for the page to show as-is; any other failure carries
+ * Spring Boot's JSON error body, which is not meant for users, so it gets the caller's fallback.
+ */
+export const readErrorMessage = async (response: Response, fallback: string): Promise<string> => {
+  if (response.headers.get('Content-Type')?.startsWith('text/plain')) {
+    const text = (await response.text()).trim()
+    if (text) return text
+  }
+  return `${fallback} (HTTP ${response.status})`
+}
+
+/**
+ * Downloads a file from the API. A plain link cannot send the bearer token, so the file is fetched
+ * and handed to the browser as an object URL, as the CGI rebuild's exports did.
+ */
+export const apiDownload = async (path: string, fileName: string): Promise<void> => {
+  const response = await apiFetch(path, { headers: { Accept: '*/*' } })
+  if (!response.ok) {
+    throw new ApiError(response.status, `GET ${path} failed with HTTP ${response.status}`)
+  }
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  document.body.append(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}

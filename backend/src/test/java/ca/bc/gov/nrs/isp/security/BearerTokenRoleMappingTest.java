@@ -1,5 +1,6 @@
 package ca.bc.gov.nrs.isp.security;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -62,8 +63,9 @@ class BearerTokenRoleMappingTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.username").value("JSMITH"))
         .andExpect(jsonPath("$.roles", contains(IspRoles.ISP_APPROVER)));
+    // Security lets the approver through; without Oracle the mills endpoint itself answers 503.
     mvc.perform(get("/api/mills").header(HttpHeaders.AUTHORIZATION, bearer()))
-        .andExpect(status().isNotFound());
+        .andExpect(result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403));
   }
 
   @Test

@@ -1,5 +1,6 @@
 package ca.bc.gov.nrs.isp.configuration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -22,10 +23,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultMatcher;
 
 /**
- * Request rules ported from the CGI rebuild (bcgov-c/nr-isp). A 404 means security allowed the request through to a
- * handler that does not exist yet; a 403 means the rule refused it.
+ * Request rules ported from the CGI rebuild (bcgov-c/nr-isp). {@link #passesSecurity()} accepts
+ * whatever the handler answered (404 for an endpoint not ported yet, 503 without Oracle, 400 for an
+ * empty body); a 401 or 403 means a rule refused the request.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -41,6 +44,10 @@ class SecurityConfigurationTest {
             Arrays.stream(roles)
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority(role))
                 .toList());
+  }
+
+  private static ResultMatcher passesSecurity() {
+    return result -> assertThat(result.getResponse().getStatus()).isNotIn(401, 403);
   }
 
   private static JwtRequestPostProcessor admin() {
@@ -83,13 +90,13 @@ class SecurityConfigurationTest {
 
   @Test
   void approversReadReportAndApproveButDoNotMaintain() throws Exception {
-    mvc.perform(get("/api/mills").with(approver())).andExpect(status().isNotFound());
-    mvc.perform(post("/api/R10").with(approver())).andExpect(status().isNotFound());
-    mvc.perform(post("/api/R13").with(approver())).andExpect(status().isNotFound());
+    mvc.perform(get("/api/mills").with(approver())).andExpect(passesSecurity());
+    mvc.perform(post("/api/R10").with(approver())).andExpect(passesSecurity());
+    mvc.perform(post("/api/R13").with(approver())).andExpect(passesSecurity());
     mvc.perform(patch("/api/sales-summary/approval").with(approver()))
-        .andExpect(status().isNotFound());
+        .andExpect(passesSecurity());
     mvc.perform(patch("/api/sales-summary/mill-report-approval").with(approver()))
-        .andExpect(status().isNotFound());
+        .andExpect(passesSecurity());
 
     mvc.perform(post("/api/mills").with(approver())).andExpect(status().isForbidden());
     mvc.perform(put("/api/mills/1").with(approver())).andExpect(status().isForbidden());
@@ -99,16 +106,16 @@ class SecurityConfigurationTest {
 
   @Test
   void administratorsMaintainReferenceData() throws Exception {
-    mvc.perform(post("/api/mills").with(admin())).andExpect(status().isNotFound());
-    mvc.perform(put("/api/mills/1").with(admin())).andExpect(status().isNotFound());
-    mvc.perform(delete("/api/mills/1").with(admin())).andExpect(status().isNotFound());
+    mvc.perform(post("/api/mills").with(admin())).andExpect(passesSecurity());
+    mvc.perform(put("/api/mills/1").with(admin())).andExpect(passesSecurity());
+    mvc.perform(delete("/api/mills/1").with(admin())).andExpect(passesSecurity());
   }
 
   @Test
   void internalEndpointsAreAdministratorOnly() throws Exception {
     mvc.perform(get("/api/internal/cache").with(approver())).andExpect(status().isForbidden());
     mvc.perform(post("/api/internal/cache/evict").with(approver())).andExpect(status().isForbidden());
-    mvc.perform(get("/api/internal/cache").with(admin())).andExpect(status().isNotFound());
+    mvc.perform(get("/api/internal/cache").with(admin())).andExpect(passesSecurity());
   }
 
   @Test
