@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: isp-backend
+  lifecycle:
+    timeout-per-shutdown-phase: ${ISP_SHUTDOWN_PHASE_TIMEOUT:60s}
+  # The oracle profile re-enables the datasource; without it the API runs with no database.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+
+server:
+  port: 8080
+  forward-headers-strategy: framework
+  shutdown: graceful
+  undertow:
+    threads:
+      # Undertow defaults to 8 workers per I/O thread, only 16 on a 2-CPU pod. Keep headroom for
+      # health probes while report and export requests hold worker threads.
+      worker: ${ISP_HTTP_WORKER_THREADS:64}
+
+logging:
+  level:
+    ca.bc.gov.nrs.isp: ${APP_LOG_LEVEL:INFO}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+
+isp:
+  runtime:
+    require-oracle-profile: ${ISP_REQUIRE_ORACLE_PROFILE:false}
+  auth:
+    oidc:
+      # BC Gov SSO (Keycloak standard realm); FAM grants the ISP client roles.
+      issuer-uri: ${ISP_OIDC_ISSUER_URI:}
+      jwk-set-uri: ${ISP_OIDC_JWK_SET_URI:}
+      client-id: ${ISP_OIDC_CLIENT_ID:}

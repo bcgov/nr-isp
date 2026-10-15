@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config'
 
-// https://vitejs.dev/config/
+// https://vitest.dev/config/
 export default defineConfig({
   resolve: {
     tsconfigPaths: true,
@@ -10,22 +10,24 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: 'src/test-setup.ts',
-    // you might want to disable it, if you don't have tests that rely on CSS
-    // since parsing CSS is slow
+    // Parsing Carbon's CSS is slow and no test depends on it.
     css: false,
     coverage: {
       reporter: ['lcov', 'text-summary', 'text', 'json', 'html'],
+      include: ['src/**/*.{ts,tsx}'],
+      thresholds: {
+        statements: 80,
+        branches: 75,
+        functions: 80,
+        lines: 80,
+      },
       exclude: [
-        '**/node_modules/**',
-        '**/dist/**',
-        '**/coverage/**',
-        '**/*.config.*',
-        'src/routeTree.gen.ts', // Auto-generated file
+        'src/main.tsx',
+        'src/**/*.d.ts',
         'src/**/*.test.ts',
-        'src/**/*.spec.ts',
         'src/**/*.test.tsx',
-        'src/**/*.spec.tsx',
-        'src/__tests__/**',
+        'src/**/__tests__/**',
+        'src/test-setup.ts',
       ],
     },
   },

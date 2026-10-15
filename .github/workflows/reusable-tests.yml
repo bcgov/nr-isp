@@ -3,97 +3,106 @@ name: Reusable Tests
 on:
   workflow_call:
     inputs:
-      ### Required
       target:
-        description: PR number, test or prod
+        description: PR number, 'test' or 'prod'
         default: ${{ github.event.number }}
+        type: string
+      slot:
+        description: |
+          Route hostname slot. For PR previews this is PR % 50; for TEST/PROD
+          it defaults to target.
+        default: ""
         type: string
 
 env:
-  DOMAIN: apps.silver.devops.gov.bc.ca
-  PREFIX: ${{ github.event.repository.name }}-${{ inputs.target }}
+  DOMAIN: apps.gold.devops.gov.bc.ca
+  PREFIX: ${{ github.event.repository.name }}-${{ inputs.slot || inputs.target }}
 
 permissions: {}
 
 jobs:
-  integration-tests:
-    name: Integration
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        name: Setup Node
-        with:
-          node-version: 24
-      - id: cache-npm
-        uses: actions/cache@v6
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-build-cache-node-modules-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-build-cache-node-modules-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
-      - name: Wait for backend health check
-        env:
-          BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}
-        run: |
-          echo "Waiting for backend health check at ${BASE_URL}/api/health..."
-          for i in {1..30}; do
-            status=$(curl -k --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" "${BASE_URL}/api/health" || true)
-            if [ "$status" -eq 200 ]; then
-              echo "Backend is healthy!"
-              exit 0
-            fi
-            echo "Waiting for health check (HTTP $status), retrying in 10s... ($i/30)"
-            sleep 10
-          done
-          echo "ERROR: Backend did not become healthy in time."
-          exit 1
-
-      - name: Run Integration Tests
-        env:
-          API_NAME: nest
-          BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}
-        run: |
-          cd common/tests/integration
-          npm ci
-          node src/main.js
-
   e2e-tests:
-    name: E2E
+    name: Basic E2E (${{ matrix.project }})
+    concurrency:
+      group: ${{ format('{0}-{1}-browser', github.event.repository.name, inputs.slot || inputs.target) }}
+      cancel-in-progress: false
+    container:
+      image: mcr.microsoft.com/playwright:v1.60.0-noble
+      options: --user 1001
     defaults:
       run:
+        shell: bash
         working-directory: frontend
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium]
     steps:
-      - uses: actions/checkout@v7
-        name: Checkout
-      - uses: actions/setup-node@v7
-        name: Setup Node
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: "npm"
+          cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Install dependencies
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
 
-      - name: Run Tests
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for deployed frontend
         env:
-          E2E_BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}/
+          E2E_BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}
+        run: bash ../.github/scripts/wait-for-frontend.sh "$E2E_BASE_URL" 17 5 '<div id="root"' 30
+
+      # The session endpoint answers 401 without a token, which proves Caddy reaches the backend
+      # and the backend's JWT security is active.
+      - name: Verify frontend proxy to backend
+        env:
+          E2E_BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}
+        run: |
+          set -euo pipefail
+
+          session_status=""
+          for attempt in $(seq 1 24); do
+            session_status="$(curl --silent --show-error \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              --connect-timeout 5 \
+              --max-time 15 \
+              "${E2E_BASE_URL}/api/session/me" || true)"
+            if [ "${session_status}" = "401" ]; then
+              break
+            fi
+            echo "Frontend proxy to backend is not available yet (attempt ${attempt}/24, status ${session_status:-none})."
+            if [ "${attempt}" -lt 24 ]; then
+              sleep 5
+            fi
+          done
+
+          if [ "${session_status}" != "401" ]; then
+            echo "Expected unauthenticated frontend-proxied session HTTP 401; received ${session_status:-none}."
+            exit 1
+          fi
+
+      - name: Run basic Playwright smoke suite
+        id: playwright
+        env:
+          E2E_BASE_URL: https://${{ env.PREFIX }}.${{ env.DOMAIN }}
           CI: "true"
         run: |
-          npx playwright test --project="chromium" --reporter=html
+          npx playwright test --project=${{ matrix.project }} --reporter=html,list
 
       - uses: actions/upload-artifact@v7
-        if: (! cancelled())
-        name: upload results
+        if: >-
+          !cancelled() &&
+          (steps.playwright.outcome == 'success' || steps.playwright.outcome == 'failure')
         with:
-          name: playwright-report-chromium
-          path: "./frontend/playwright-report" # path from current folder
+          name: playwright-report-${{ matrix.project }}-${{ inputs.target }}
+          path: frontend/playwright-report
           retention-days: 7

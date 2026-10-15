@@ -1,0 +1,52 @@
+### Maven ###
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+### Java ###
+*.class
+*.log
+*.jar
+*.war
+hs_err_pid*
+replay_pid*
+
+### IDEs ###
+.idea/*
+!.idea/codeStyles
+!.idea/runConfigurations
+*.iml
+*.iws
+out/
+.project
+.classpath
+.settings/
+
+config/
+
+# SSL/certificate files
+*.crt
+*.pem
+*.cer
+*.jks
+*.p12
+src/main/resources/cert/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Local Spring profile with environment-specific credentials
+src/main/resources/application-local.yml
+# The root .gitignore ignores every application-*.yml; these profiles hold no secrets.
+!src/main/resources/application-oracle.yml
+!src/test/resources/application-test.yml
