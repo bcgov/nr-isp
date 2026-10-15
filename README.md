@@ -46,8 +46,8 @@ Two ways to run ISP locally:
 2. Java 21.0.12 or newer and Maven 3.9+ (Option A). Older Java 21 builds have outdated B.C. time
    rules; check yours with `java backend/checks/VerifyTimezone.java`.
 3. Node 24+ (Option A).
-4. A BC Gov SSO (CSS) integration for ISP with `http://localhost:3000/authCallback` as a redirect
-   URI and `http://localhost:3000` as a post-logout URI.
+4. A BC Gov SSO (CSS) public browser client for ISP with `http://localhost:3000` as a web origin
+   and post-logout URI, and `http://localhost:3000/authCallback` as a redirect URI.
 
 ### Files you create once
 
@@ -121,15 +121,18 @@ ISP follows the quickstart-openshift build-once/promote model, as nr-lexis does.
 | Pull request | `pr-open.yml` | Builds both images tagged with the PR number, runs the tests, deploys a DEV preview at `https://nr-isp-<PR % 50>.apps.gold.devops.gov.bc.ca`, then runs the smoke suite against it |
 | PR closed | `pr-close.yml` | Promotes the PR images and deletes the preview |
 | Merge to `main` | `merge.yml` | Deploys the merged PR's images to TEST by digest, runs the smoke suite and records a release candidate |
-| Manual | `release-prod.yml` | Deploys the tested image digests of a tagged `main` commit to PROD at the vanity host |
+| Manual | `release-prod.yml` | Deploys the tested image digests of a tagged `main` commit to PROD at `https://isp.nrs.gov.bc.ca` |
 
 To release, wait for the commit's Merge run to pass, tag that commit (for example `v1.0.0`), then
-run **Release PROD** from `main` with the tag.
+run **Release PROD** from `main` with the tag. A missing, expired or mismatched release-candidate
+artifact stops the release. If a Merge run fails, use **Re-run all jobs** to redeploy and retest its
+images; partial reruns cannot publish a release candidate. A rollback uses the same release workflow
+with a retained, previously tested tag.
 
 ### GitHub environment settings
 
-Set these on the `dev`, `test` and `prod` GitHub Environments, not on the repository, so a missing
-value can never fall back to another environment's.
+Set these on the `dev`, `test` and `prod` GitHub Environments. Keep environment credentials out of
+repository-level settings, which can otherwise supply fallback values.
 
 | Setting | Kind | Notes |
 |---|---|---|
@@ -143,11 +146,46 @@ value can never fall back to another environment's.
 | `ISP_OIDC_CLIENT_ID` | Variable | ISP CSS browser client ID |
 | `ISP_OIDC_IDIR_HINT` | Variable | Optional; defaults to `azureidir` |
 | `ALLOWED_ORIGINS` | Variable | Optional; extra origins that call the API directly |
-| `VANITY_HOST` | Variable | PROD only; the public hostname |
-| `VANITY_TLS_CERTIFICATE`, `VANITY_TLS_KEY`, `VANITY_TLS_CA_CERTIFICATE` | Secret | PROD only; PEM certificate, key and CA chain for `VANITY_HOST` |
+| `VANITY_HOST` | Variable | PROD only; `isp.nrs.gov.bc.ca` (hostname only) |
+| `VANITY_TLS_CERTIFICATE` | Secret | PROD only; PEM leaf/server certificate for `isp.nrs.gov.bc.ca` |
+| `VANITY_TLS_KEY` | Secret | PROD only; matching unencrypted PEM private key |
+| `VANITY_TLS_CA_CERTIFICATE` | Secret | PROD only; PEM CA chain in issuer order |
 | `SYSDIG_API_TOKEN` | Secret | PROD only; optional, syncs `monitoring/alerts/` |
 
 `sonar_token_backend` and `sonar_token_frontend` are optional repository secrets for SonarCloud.
+
+### SSO client registration
+
+Use a public browser client with authorization code and PKCE; the browser has no client secret.
+Backend and frontend use the same environment's `ISP_OIDC_ISSUER_URI` and `ISP_OIDC_CLIENT_ID`.
+Register these exact web origins, redirect URIs and post-logout URIs with the corresponding CSS
+client:
+
+| Environment | Web origin and post-logout URI | Redirect URI |
+|---|---|---|
+| DEV | `https://nr-isp-N.apps.gold.devops.gov.bc.ca` | `https://nr-isp-N.apps.gold.devops.gov.bc.ca/authCallback` |
+| TEST | `https://nr-isp-test.apps.gold.devops.gov.bc.ca` | `https://nr-isp-test.apps.gold.devops.gov.bc.ca/authCallback` |
+| PROD | `https://isp.nrs.gov.bc.ca` | `https://isp.nrs.gov.bc.ca/authCallback` |
+
+For DEV, replace `N` with each slot from `0` through `49`; a PR uses `PR % 50`. Grant the
+environment's users `ISP_ADMIN` or `ISP_APPROVER` through FAM. Register local origins separately,
+including `http://localhost:3005` if using the optional Caddy Compose service.
+
+Only one open preview can own a slot. If two PRs share a slot, the newer Route can be rejected;
+the deployment now fails its admission check instead of testing the other PR's preview.
+
+### PROD vanity setup
+
+Request DNS for `isp.nrs.gov.bc.ca` using the Gold ingress target confirmed by the platform team,
+and a TLS certificate covering that hostname. Store the certificate, matching private key and CA
+chain in the three PROD GitHub Environment secrets above; never commit them. The workflow passes
+the PEM values to the edge Route with deployer debug logging disabled. Certificate renewal updates
+these secrets and uses the manual PROD release workflow; it does not require an image rebuild.
+
+Missing PROD hostname or TLS inputs stop the deployment before the backend rolls out. After
+applying a Route, the workflow checks its hostname and frontend Service target and waits for router
+admission. Public DNS, the served certificate and the IDIR login/logout round trip still need
+verification at `https://isp.nrs.gov.bc.ca` before production acceptance.
 
 ## Component docs
 

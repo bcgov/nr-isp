@@ -151,6 +151,23 @@ jobs:
             exit 1
           fi
 
+      - name: Validate PROD vanity Route configuration
+        if: ${{ inputs.target == 'prod' }}
+        env:
+          VANITY_HOST: ${{ vars.VANITY_HOST }}
+          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
+          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
+          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
+        run: |
+          set -euo pipefail
+          for setting in VANITY_HOST VANITY_TLS_CERTIFICATE VANITY_TLS_KEY VANITY_TLS_CA_CERTIFICATE; do
+            setting_value="${!setting}"
+            if [ -z "${setting_value//[[:space:]]/}" ]; then
+              echo "::error title=Missing PROD vanity Route configuration::${setting} must be configured in the PROD GitHub Environment."
+              exit 1
+            fi
+          done
+
       # Check both images before the backend rolls out, so a bad frontend reference cannot leave
       # a new backend running beside the old frontend.
       - name: Validate release images
@@ -248,29 +265,26 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # Use this workflow's guard even when releasing a tag that predates it. The deployer also
+      # checks out the repository, so retain the helper outside the workspace with the templates.
+      - name: Stage Route verification
+        run: |
+          mkdir -p "$RUNNER_TEMP/isp-deploy"
+          cp .github/scripts/verify-route.sh "$RUNNER_TEMP/isp-deploy/verify-route.sh"
+
+      - uses: actions/checkout@v6
+        if: ${{ inputs.source_ref != '' && inputs.source_ref != github.sha }}
+        with:
+          persist-credentials: false
           ref: ${{ inputs.source_ref || github.sha }}
 
       - name: Stage frontend templates
         run: |
-          mkdir -p "$RUNNER_TEMP/isp-deploy"
           cp frontend/openshift.deploy.yml "$RUNNER_TEMP/isp-deploy/frontend.yml"
           cp frontend/openshift.route.yml "$RUNNER_TEMP/isp-deploy/route.yml"
           cp frontend/openshift.vanity-route.yml "$RUNNER_TEMP/isp-deploy/vanity-route.yml"
-
-      - name: Validate PROD vanity Route configuration
-        if: ${{ inputs.target == 'prod' }}
-        env:
-          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
-          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
-          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
-        run: |
-          set -euo pipefail
-          for setting in VANITY_HOST VANITY_TLS_CERTIFICATE VANITY_TLS_KEY VANITY_TLS_CA_CERTIFICATE; do
-            if [ -z "${!setting}" ]; then
-              echo "::error title=Missing PROD vanity Route configuration::${setting} must be configured in the PROD GitHub Environment."
-              exit 1
-            fi
-          done
 
       - uses: bcgov/action-deployer-openshift@bb9d143f4f03187239580c17c4b77da04cdb6e66 # v4.2.2
         id: deploy
@@ -335,6 +349,24 @@ jobs:
             -p VANITY_TLS_KEY="$VANITY_TLS_KEY"
             -p VANITY_TLS_CA_CERTIFICATE="$VANITY_TLS_CA_CERTIFICATE"
             $OC_PROCESS_FLAGS
+
+      - name: Verify frontend Route admission
+        if: ${{ steps.deploy.outputs.triggered == 'true' }}
+        env:
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+          APP_NAME: ${{ github.event.repository.name }}
+          TARGET: ${{ inputs.target }}
+          SLOT: ${{ inputs.slot || inputs.target }}
+        run: |
+          service_name="${APP_NAME}-frontend-${TARGET}"
+          route_name="$service_name"
+          route_host="${APP_NAME}-${SLOT}.apps.gold.devops.gov.bc.ca"
+          if [ "$TARGET" = prod ]; then
+            route_name="${service_name}-vanity"
+            route_host="$VANITY_HOST"
+          fi
+          # The shared deployer leaves its authenticated oc context available to later steps.
+          bash "$RUNNER_TEMP/isp-deploy/verify-route.sh" "$OC_NAMESPACE" "$route_name" "$route_host" "$service_name"
 
   deployment-result:
     name: Record deployment result

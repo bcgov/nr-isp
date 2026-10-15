@@ -35,8 +35,11 @@ prefers it over build-time `import.meta.env` values. Locally, put them in `.env`
 | `VITE_OIDC_CLIENT_ID` | ISP public browser client ID (required) |
 | `VITE_OIDC_IDIR_HINT` | `kc_idp_hint` for IDIR; defaults to `azureidir` |
 
-The container refuses to start without the issuer and client ID. The SSO client must allow
-`<origin>/authCallback` as a redirect URI and `<origin>` as a post-logout URI.
+The container refuses to start without the issuer and client ID. The public SSO browser client uses
+authorization code and PKCE without a client secret. It must allow `<origin>` as a web origin and
+post-logout URI, and `<origin>/authCallback` as a redirect URI. In PROD these are
+`https://isp.nrs.gov.bc.ca` and `https://isp.nrs.gov.bc.ca/authCallback`; see the
+[SSO registration table](../README.md#sso-client-registration) for DEV slots, TEST and local origins.
 
 ## Code layout
 

@@ -61,8 +61,8 @@ jobs:
           distribution: "temurin"
           cache: maven
 
-      - name: Verify release controls
-        run: node --test .github/scripts/release-images.test.mjs
+      - name: Verify deployment and release controls
+        run: node --test .github/scripts/*.test.mjs
 
       - name: Maven verify
         working-directory: backend

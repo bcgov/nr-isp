@@ -82,14 +82,19 @@ Route templates).
 - A merge to `main` deploys the merged PR's images to TEST, pinned by digest, runs the smoke suite
   and records a release candidate.
 - **Release PROD** deploys the exact tested digests for a tagged commit. It never rebuilds images.
-- PROD is served only at `VANITY_HOST` through `frontend/openshift.vanity-route.yml`; DEV and TEST
-  use the generated Gold Route.
+- PROD uses `https://isp.nrs.gov.bc.ca` (`VANITY_HOST`) through the edge Route in
+  `frontend/openshift.vanity-route.yml`; DEV and TEST use the generated Gold Route.
 
-Each deploy job fails before deploying unless `oc_namespace` ends in `-<environment>`, so a missing
-environment secret cannot fall back to a repository-level one. Backend replicas scale on CPU with an
-HPA, roll one pod at a time, and drain gracefully before shutdown. Readiness does not depend on the
-Oracle pool, so a slow database cannot take every replica out of the Service at once; startup still
-fails fast without Oracle.
+Each deploy job rejects an `oc_namespace` that does not end in `-<environment>`. Missing PROD
+hostname or TLS inputs fail before backend rollout. After applying a Route, the workflow verifies
+the expected hostname and frontend Service target and waits for router admission. This does not
+establish public DNS, certificate validity or a successful SSO round trip. The [deployment setup
+instructions](../README.md#deployments) list the required Environment settings, SSO registrations
+and release recovery steps.
+
+Backend replicas scale on CPU with an HPA, roll one pod at a time, and drain gracefully before
+shutdown. Readiness does not depend on the Oracle pool, so a slow database cannot take every replica
+out of the Service at once; startup still fails fast without Oracle.
 
 ## Changes from the CGI rebuild
 

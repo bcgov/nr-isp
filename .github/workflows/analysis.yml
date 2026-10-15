@@ -36,6 +36,9 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: Verify deployment and release controls
+        run: node --test .github/scripts/*.test.mjs
+
       # The default-on coverage profile attaches JaCoCo to Surefire and writes
       # target/site/jacoco/jacoco.xml during verify for the Sonar scan below.
       - name: Maven verify (unit tests + JaCoCo coverage)
