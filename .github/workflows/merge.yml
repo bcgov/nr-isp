@@ -4,12 +4,8 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '*.md'
-      - '.github/**'
-      - '.github/graphics/**'
-      - '!.github/workflows/**'
-  workflow_dispatch:
-
+      - "*.md"
+      - ".github/graphics/**"
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
@@ -17,6 +13,10 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Intentional quickstart-openshift build-once/promote model. This workflow deploys
+  # PR-numbered images, not images built from the merged main SHA. Before sequential
+  # merges, synchronize each later PR with main and confirm its images were refreshed
+  # from that current baseline. See docs/architecture.md#image-promotion-model.
   init:
     name: Initialize
     permissions:
@@ -24,104 +24,78 @@ jobs:
       pull-requests: read
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
+      backend_image: ${{ steps.images.outputs.backend_image }}
+      frontend_image: ${{ steps.images.outputs.frontend_image }}
+      capture_attempt: ${{ steps.images.outputs.capture_attempt }}
     runs-on: ubuntu-24.04
     steps:
-      # Get PR number for squash merges to main
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - id: pr
-        uses: bcgov/action-get-pr@28b0adf8e4d40720d41f9c87356ce24b0a4bd6af # v0.3.1
+        uses: bcgov/action-get-pr@3931962bf13b3f4702d0013ec7c836f752ff1a3b # v0.3.0
+
+      - name: Resolve candidate image digests
+        id: images
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+        run: node .github/scripts/release-images.mjs capture
+
   deploy-test:
     name: TEST Deploys (${{ needs.init.outputs.pr }})
     needs: [init]
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-deploy.yml
     secrets:
-      db_password: ${{ secrets.db_password }}
       oc_namespace: ${{ secrets.oc_namespace }}
       oc_token: ${{ secrets.oc_token }}
+      database_user: ${{ secrets.database_user }}
+      database_password: ${{ secrets.database_password }}
+      database_host: ${{ secrets.database_host }}
+      database_service_name: ${{ secrets.database_service_name }}
+      keystore_secret: ${{ secrets.keystore_secret }}
     with:
       environment: test
       target: test
       tag: ${{ needs.init.outputs.pr }}
+      backend_image: ${{ needs.init.outputs.backend_image }}
+      frontend_image: ${{ needs.init.outputs.frontend_image }}
+      backend_min_replicas: "2"
+      backend_max_replicas: "2"
+      frontend_replicas: "2"
+      backend_cpu_request: "250m"
+      backend_memory_request: "768Mi"
+      backend_cpu_limit: "1000m"
+      backend_memory_limit: "1536Mi"
 
   tests:
     name: Tests
     needs: [deploy-test]
+    permissions:
+      contents: read
     uses: ./.github/workflows/reusable-tests.yml
     with:
       target: test
 
-  deploy-prod:
-    name: PROD Deploys (${{ needs.init.outputs.pr }})
-    needs: [tests, init]
-    uses: ./.github/workflows/reusable-deploy.yml
-    secrets:
-      db_password: ${{ secrets.db_password }}
-      oc_namespace: ${{ secrets.oc_namespace }}
-      oc_token: ${{ secrets.oc_token }}
-    with:
-      environment: prod
-      target: prod
-      tag: ${{ needs.init.outputs.pr }}
-
-  # Vanity TLS on the PROD frontend Service.
-  # No-ops cleanly if vars.ROUTE_HOST is unset. Sibling of promote/monitor-prod
-  # so an expired or invalid cert fails Merge after containers have already rolled.
-  route-tls:
-    name: Route TLS (PROD)
-    needs: [deploy-prod]
+  release-candidate:
+    name: Record tested release candidate
+    needs: [init, tests]
     runs-on: ubuntu-24.04
-    environment: prod
     permissions:
       contents: read
-    timeout-minutes: 10
     steps:
-      - uses: bcgov/actions-openshift/route-tls@ea9651011c0bf9d15aad22cf5aa2fae93c096edf # v0.3.2
-        if: ${{ vars.ROUTE_HOST != '' }}
+      - uses: actions/checkout@v6
         with:
-          hostname: ${{ vars.ROUTE_HOST }}
-          target_service: ${{ github.event.repository.name }}-prod-frontend
-          tls_certificate: ${{ secrets.TLS_CERTIFICATE }}
-          tls_private_key: ${{ secrets.TLS_PRIVATE_KEY }}
-          tls_ca_certificate: ${{ secrets.TLS_CA_CERTIFICATE }}
-          oc_namespace: ${{ secrets.oc_namespace }}
-          oc_server: ${{ vars.oc_server }}
-          oc_token: ${{ secrets.oc_token }}
-
-  # Sync Sysdig email alerts for PROD. No-ops cleanly if SYSDIG_API_TOKEN is
-  # unset or monitoring/alerts/ is empty — adoption is gradual. Alert
-  # templates live in monitoring/alerts/ in this repo; add or remove files
-  # there to customize the alert set.
-  monitor-prod:
-    name: Sysdig Monitor (PROD)
-    needs: [deploy-prod]
-    runs-on: ubuntu-24.04
-    environment: prod
-    permissions:
-      contents: read
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      # 0.0.3 is the first version with __APP__ template substitution, which
-      # monitoring/alerts/*.json depend on — don't downgrade this pin.
-      - uses: bcgov/actions-openshift/sysdig-monitor@4dbe4f6d25d14cbdb01e525a302e61e31f96c3ed # v0.5.0
+          persist-credentials: false
+      - name: Record tested images
+        env:
+          CAPTURE_ATTEMPT: ${{ needs.init.outputs.capture_attempt }}
+          BACKEND_IMAGE: ${{ needs.init.outputs.backend_image }}
+          FRONTEND_IMAGE: ${{ needs.init.outputs.frontend_image }}
+        run: node .github/scripts/release-images.mjs record "$RUNNER_TEMP/release-candidate.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          sysdig_api_token: ${{ secrets.SYSDIG_API_TOKEN }}
-          oc_namespace: ${{ secrets.oc_namespace }}
-          app: ${{ github.event.repository.name }}
-
-  promote:
-    name: Promote Images
-    needs: [deploy-prod, init]
-    runs-on: ubuntu-slim
-    permissions:
-      packages: write
-    strategy:
-      matrix:
-        package: [migrations, backend, frontend]
-    timeout-minutes: 1
-    steps:
-      - uses: shrink/actions-docker-registry-tag@e6aaef25c595b6e0edd18bf4c7dbfea3abd43299 # v5
-        with:
-          registry: ghcr.io
-          repository: ${{ github.repository }}/${{ matrix.package }}
-          target: ${{ needs.init.outputs.pr }}
-          tags: prod
+          name: release-candidate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-candidate.json
+          if-no-files-found: error

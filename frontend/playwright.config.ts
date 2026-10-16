@@ -1,62 +1,34 @@
 import { defineConfig, devices } from '@playwright/test'
-import { baseURL } from './e2e/utils'
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// require('dotenv').config();
+const E2E_BASE_URL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:4173'
+const isRemoteE2E = !!process.env.CI && /^https?:\/\//.test(process.env.E2E_BASE_URL ?? '')
 
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
-  timeout: 120000,
   testDir: './e2e',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: [
-    ['line'],
-    ['list', { printSteps: true }],
-    ['html', { open: 'always' }],
-  ],
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  retries: process.env.CI ? 1 : 0,
+  reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: baseURL,
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
-    ignoreHTTPSErrors: process.env.CI === 'true' || process.env.E2E_IGNORE_HTTPS_ERRORS === 'true',
+    baseURL: E2E_BASE_URL,
+    trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
-
-  /* Configure projects for major browsers */
-  projects: [
-    {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        baseURL: baseURL,
-        launchOptions: process.env.CI === 'true'
-          ? { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
-          : undefined,
+  // CI runs against the deployed preview; locally, start Vite with placeholder SSO settings.
+  webServer: isRemoteE2E
+    ? undefined
+    : {
+        command: 'npm run dev -- --host 127.0.0.1 --port 4173',
+        url: 'http://127.0.0.1:4173',
+        env: {
+          VITE_OIDC_ISSUER_URI:
+            process.env.VITE_OIDC_ISSUER_URI ??
+            'https://local-e2e.example.test/auth/realms/standard',
+          VITE_OIDC_CLIENT_ID: process.env.VITE_OIDC_CLIENT_ID ?? 'local-e2e-client',
+        },
+        reuseExistingServer: !process.env.CI,
+        timeout: 120000,
       },
-    },
-    {
-      name: 'Google Chrome',
-      use: {
-        ...devices['Desktop Chrome'],
-        channel: 'chrome',
-        baseURL: baseURL,
-        launchOptions: process.env.CI === 'true'
-          ? { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
-          : undefined,
-      },
-    },
-  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 })

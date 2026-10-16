@@ -1,101 +1,438 @@
-# Reusable Deploy - Lite Mode Verification
 name: Reusable Deploy
 
 on:
   workflow_call:
     inputs:
       environment:
-        description: GitHub/OpenShift environment
+        description: GitHub/OpenShift environment (e.g. dev, test, prod)
         default: ""
         type: string
       target:
-        description: Deployment target; usually PR number, test or prod
+        description: Deployment target; usually PR number, 'test' or 'prod'
         default: ${{ github.event.number }}
+        type: string
+      slot:
+        description: |
+          Route hostname slot — PR # mod-50'd into a fixed pool for callback
+          URLs. Omit for TEST/PROD; defaults to target.
+        default: ""
+        type: string
+      backend_min_replicas:
+        description: Minimum backend replica count
+        default: "1"
+        type: string
+      backend_max_replicas:
+        description: Maximum backend replica count used by the HPA
+        default: "3"
+        type: string
+      frontend_replicas:
+        description: Frontend replica count
+        default: "2"
+        type: string
+      backend_cpu_request:
+        description: Backend CPU request
+        default: "200m"
+        type: string
+      backend_memory_request:
+        description: Backend memory request
+        default: "500Mi"
+        type: string
+      backend_cpu_limit:
+        description: Backend CPU limit
+        default: "1000m"
+        type: string
+      backend_memory_limit:
+        description: Backend memory limit
+        default: "800Mi"
+        type: string
+      frontend_cpu_request:
+        description: Frontend CPU request
+        default: "50m"
+        type: string
+      frontend_memory_request:
+        description: Frontend memory request
+        default: "64Mi"
+        type: string
+      frontend_cpu_limit:
+        description: Frontend CPU limit
+        default: "200m"
+        type: string
+      frontend_memory_limit:
+        description: Frontend memory limit
+        default: "128Mi"
         type: string
       tag:
         description: Container tag
         default: ${{ github.event.number }}
         type: string
+      backend_image:
+        description: Immutable backend image reference; defaults to the PR tag
+        default: ""
+        type: string
+      frontend_image:
+        description: Immutable frontend image reference; defaults to the PR tag
+        default: ""
+        type: string
+      source_ref:
+        description: Commit containing the deployment templates
+        default: ""
+        type: string
       triggers:
-        description: Triggers for deployment
+        description: Triggers for deployment (paths that must change)
         default: ""
         type: string
 
     secrets:
-      db_password:
-        description: Database password
-        required: true
       oc_namespace:
         description: OpenShift namespace
         required: true
       oc_token:
         description: OpenShift token
         required: true
+      database_user:
+        description: Oracle DATABASE_USER
+        required: true
+      database_password:
+        description: Oracle DATABASE_PASSWORD
+        required: true
+      database_host:
+        description: Oracle host
+        required: true
+      database_service_name:
+        description: Oracle service name
+        required: true
+      keystore_secret:
+        description: Oracle truststore passphrase
+        required: true
+      vanity_tls_certificate:
+        description: PEM leaf certificate for the required PROD vanity Route
+        required: false
+      vanity_tls_key:
+        description: PEM private key matching the PROD vanity certificate
+        required: false
+      vanity_tls_ca_certificate:
+        description: PEM intermediate and root chain for the PROD vanity certificate
+        required: false
+
     outputs:
       triggered:
         description: Has deployment been triggered?
-        value: ${{ jobs.init.outputs.triggered }}
+        value: ${{ jobs.frontend.outputs.triggered }}
 
 permissions: {}
 
+env:
+  # A release of an older commit uses its own templates with this workflow's parameters; ignore
+  # parameters added since that commit. A missing template or required parameter still fails.
+  OC_PROCESS_FLAGS: ${{ inputs.source_ref != '' && inputs.source_ref != github.sha && '--ignore-unknown-parameters' || '' }}
+
 jobs:
-  init:
-    name: Deploy (init)
-    environment: ${{ inputs.environment }}
+  # GitHub gives a job its environment's secret or variable, else the repository's, else the
+  # organization's, with no sign of which. Secrets a caller passes are repository values, replaced
+  # only where the environment defines the same name. Deployment settings therefore live only in the
+  # dev, test and prod environments, and this job (which has no environment, so it sees exactly the
+  # repository and organization values) fails if any exists outside them.
+  settings:
+    name: Check deployment settings source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      - name: Reject deployment settings outside GitHub Environments
+        env:
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+          OC_TOKEN: ${{ secrets.oc_token }}
+          DATABASE_HOST: ${{ secrets.database_host }}
+          DATABASE_SERVICE_NAME: ${{ secrets.database_service_name }}
+          DATABASE_USER: ${{ secrets.database_user }}
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          KEYSTORE_SECRET: ${{ secrets.keystore_secret }}
+          ISP_OIDC_ISSUER_URI: ${{ vars.ISP_OIDC_ISSUER_URI }}
+          ISP_OIDC_CLIENT_ID: ${{ vars.ISP_OIDC_CLIENT_ID }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          VANITY_HOST: ${{ vars.VANITY_HOST }}
+          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
+          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
+          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
+        run: bash .github/scripts/check-deploy-settings.sh shared
+
+  backend:
+    name: Deploy (backend)
+    needs: [settings]
+    environment:
+      name: ${{ inputs.environment }}
+      deployment: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
-    runs-on: ubuntu-24.04
     steps:
+      # Use this workflow's checks even when releasing a tag that predates them.
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # Every value must come from this environment and belong to it: the namespace suffix and the
+      # SSO realm are checked against the environment name before anything rolls out.
+      - name: Validate environment settings
+        env:
+          DEPLOY_ENV: ${{ inputs.environment }}
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+          OC_TOKEN: ${{ secrets.oc_token }}
+          OC_SERVER: ${{ vars.oc_server }}
+          DATABASE_HOST: ${{ secrets.database_host }}
+          DATABASE_SERVICE_NAME: ${{ secrets.database_service_name }}
+          DATABASE_USER: ${{ secrets.database_user }}
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          KEYSTORE_SECRET: ${{ secrets.keystore_secret }}
+          ISP_OIDC_ISSUER_URI: ${{ vars.ISP_OIDC_ISSUER_URI }}
+          ISP_OIDC_CLIENT_ID: ${{ vars.ISP_OIDC_CLIENT_ID }}
+        run: bash .github/scripts/check-deploy-settings.sh environment "$DEPLOY_ENV"
+
+      - name: Validate PROD vanity Route configuration
+        if: ${{ inputs.target == 'prod' }}
+        env:
+          VANITY_HOST: ${{ vars.VANITY_HOST }}
+          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
+          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
+          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
+        run: |
+          set -euo pipefail
+          for setting in VANITY_HOST VANITY_TLS_CERTIFICATE VANITY_TLS_KEY VANITY_TLS_CA_CERTIFICATE; do
+            setting_value="${!setting}"
+            if [ -z "${setting_value//[[:space:]]/}" ]; then
+              echo "::error title=Missing PROD vanity Route configuration::${setting} must be configured in the PROD GitHub Environment."
+              exit 1
+            fi
+          done
+
+      # Check both images before the backend rolls out, so a bad frontend reference cannot leave
+      # a new backend running beside the old frontend.
+      - name: Validate release images
+        if: ${{ inputs.environment != 'dev' }}
+        env:
+          BACKEND_IMAGE: ${{ inputs.backend_image }}
+          FRONTEND_IMAGE: ${{ inputs.frontend_image }}
+          IMAGE_REPOSITORY: ghcr.io/${{ github.repository }}
+        run: |
+          for release in "backend=$BACKEND_IMAGE" "frontend=$FRONTEND_IMAGE"; do
+            component="${release%%=*}"
+            if [[ ! "${release#*=}" =~ ^"$IMAGE_REPOSITORY/$component"@sha256:[a-f0-9]{64}$ ]]; then
+              echo "::error::TEST and PROD require the repository's ${component} image pinned by SHA-256 digest."
+              exit 1
+            fi
+          done
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
+
+      # The deployer performs its own checkout. Keep the selected release templates
+      # outside the workspace so that checkout cannot replace them with newer main files.
+      - name: Stage backend template
+        run: |
+          mkdir -p "$RUNNER_TEMP/isp-deploy"
+          cp backend/openshift.deploy.yml "$RUNNER_TEMP/isp-deploy/backend.yml"
+
       - uses: bcgov/action-deployer-openshift@bb9d143f4f03187239580c17c4b77da04cdb6e66 # v4.2.2
         id: deploy
         env:
-          DB_PASSWORD: ${{ secrets.db_password }}
+          DATABASE_HOST: ${{ secrets.database_host }}
+          DATABASE_SERVICE_NAME: ${{ secrets.database_service_name }}
+          DATABASE_USER: ${{ secrets.database_user }}
+          DATABASE_PASSWORD: ${{ secrets.database_password }}
+          KEYSTORE_SECRET: ${{ secrets.keystore_secret }}
         with:
-          file: common/openshift.init.yml
+          file: ${{ runner.temp }}/isp-deploy/backend.yml
+          # PR lite mode produces an invalid strategy for this RollingUpdate deployment.
+          lite_mode: false
           oc_namespace: ${{ secrets.oc_namespace }}
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
-          # Secret + NetworkPolicies: create if missing. Postgres ignores
-          # POSTGRES_PASSWORD after first boot; restamping the Secret desyncs Flyway.
-          # New NetworkPolicy names still apply; existing NP specs do not update.
-          overwrite: false
-          parameters: -p DB_PASSWORD="$DB_PASSWORD"
+          debug: false
+          overwrite: true
+          parameters:
             -p ZONE="${{ inputs.target }}"
             -p NAME="${{ github.event.repository.name }}"
+            -p IMAGE_REF="${{ inputs.backend_image || format('ghcr.io/{0}/backend:{1}', github.repository, inputs.tag) }}"
+            -p ROLLOUT_TRIGGER="${{ github.run_id }}-${{ github.run_attempt }}"
+            -p MIN_REPLICAS="${{ inputs.backend_min_replicas }}"
+            -p MAX_REPLICAS="${{ inputs.backend_max_replicas }}"
+            -p MIN_CPU="${{ inputs.backend_cpu_request }}"
+            -p MIN_MEM="${{ inputs.backend_memory_request }}"
+            -p MAX_CPU="${{ inputs.backend_cpu_limit }}"
+            -p MAX_MEM="${{ inputs.backend_memory_limit }}"
+            -p ISP_OIDC_ISSUER_URI="${{ vars.ISP_OIDC_ISSUER_URI }}"
+            -p ISP_OIDC_CLIENT_ID="${{ vars.ISP_OIDC_CLIENT_ID }}"
+            -p ALLOWED_ORIGINS="${{ vars.ALLOWED_ORIGINS }}"
+            -p DATABASE_HOST="$DATABASE_HOST"
+            -p DATABASE_SERVICE_NAME="$DATABASE_SERVICE_NAME"
+            -p DATABASE_USER="$DATABASE_USER"
+            -p DATABASE_PASSWORD="$DATABASE_PASSWORD"
+            -p KEYSTORE_SECRET="$KEYSTORE_SECRET"
+            $OC_PROCESS_FLAGS
           triggers: ${{ inputs.triggers }}
-          debug: true
 
-  deploy:
-    name: Deploy (${{ matrix.name }})
-    environment: ${{ inputs.environment }}
-    needs: [init]
+  frontend:
+    name: Deploy (frontend)
+    environment:
+      name: ${{ inputs.environment }}
+      deployment: false
+    needs: [backend]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    strategy:
-      matrix:
-        name: [database, backend, frontend]
-        include:
-          - name: database
-            file: common/openshift.database.yml
-            parameters: -p DB_PVC_SIZE="256Mi"
-          - name: backend
-            file: backend/openshift.deploy.yml
-            parameters: -p IMAGE_TAG="${{ inputs.tag }}"
-          - name: frontend
-            file: frontend/openshift.deploy.yml
-            parameters: -p IMAGE_TAG="${{ inputs.tag }}"
+    permissions:
+      contents: read
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
+    env:
+      VANITY_HOST: ${{ vars.VANITY_HOST }}
     steps:
+      # Each job resolves its environment secrets separately; see the backend job.
+      - name: Validate OpenShift namespace
+        env:
+          DEPLOY_ENV: ${{ inputs.environment }}
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+        run: |
+          if [[ "$OC_NAMESPACE" != *-"$DEPLOY_ENV" ]]; then
+            echo "::error title=Wrong OpenShift namespace::oc_namespace must be the ${DEPLOY_ENV} namespace, ending in -${DEPLOY_ENV}."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+
+      # Use this workflow's guard even when releasing a tag that predates it. The deployer also
+      # checks out the repository, so retain the helper outside the workspace with the templates.
+      - name: Stage Route verification
+        run: |
+          mkdir -p "$RUNNER_TEMP/isp-deploy"
+          cp .github/scripts/verify-route.sh "$RUNNER_TEMP/isp-deploy/verify-route.sh"
+
+      - uses: actions/checkout@v6
+        if: ${{ inputs.source_ref != '' && inputs.source_ref != github.sha }}
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.source_ref || github.sha }}
+
+      - name: Stage frontend templates
+        run: |
+          cp frontend/openshift.deploy.yml "$RUNNER_TEMP/isp-deploy/frontend.yml"
+          cp frontend/openshift.route.yml "$RUNNER_TEMP/isp-deploy/route.yml"
+          cp frontend/openshift.vanity-route.yml "$RUNNER_TEMP/isp-deploy/vanity-route.yml"
+
       - uses: bcgov/action-deployer-openshift@bb9d143f4f03187239580c17c4b77da04cdb6e66 # v4.2.2
         id: deploy
         with:
-          file: ${{ matrix.file }}
+          file: ${{ runner.temp }}/isp-deploy/frontend.yml
           oc_namespace: ${{ secrets.oc_namespace }}
           oc_server: ${{ vars.oc_server }}
           oc_token: ${{ secrets.oc_token }}
-          debug: true
-          parameters: -p ZONE="${{ inputs.target }}"
+          debug: false
+          overwrite: true
+          parameters:
+            -p ZONE="${{ inputs.target }}"
             -p NAME="${{ github.event.repository.name }}"
-            ${{ matrix.parameters }}
+            -p IMAGE_REF="${{ inputs.frontend_image || format('ghcr.io/{0}/frontend:{1}', github.repository, inputs.tag) }}"
+            -p ROLLOUT_TRIGGER="${{ github.run_id }}-${{ github.run_attempt }}"
+            -p REPLICAS="${{ inputs.frontend_replicas }}"
+            -p MIN_CPU="${{ inputs.frontend_cpu_request }}"
+            -p MIN_MEM="${{ inputs.frontend_memory_request }}"
+            -p MAX_CPU="${{ inputs.frontend_cpu_limit }}"
+            -p MAX_MEM="${{ inputs.frontend_memory_limit }}"
+            -p VITE_OIDC_ISSUER_URI="${{ vars.ISP_OIDC_ISSUER_URI }}"
+            -p VITE_OIDC_CLIENT_ID="${{ vars.ISP_OIDC_CLIENT_ID }}"
+            -p VITE_OIDC_IDIR_HINT="${{ vars.ISP_OIDC_IDIR_HINT || 'azureidir' }}"
+            $OC_PROCESS_FLAGS
           triggers: ${{ inputs.triggers }}
+
+      - name: Default Route (non-PROD)
+        if: ${{ inputs.target != 'prod' }}
+        uses: bcgov/action-deployer-openshift@bb9d143f4f03187239580c17c4b77da04cdb6e66 # v4.2.2
+        with:
+          file: ${{ runner.temp }}/isp-deploy/route.yml
+          oc_namespace: ${{ secrets.oc_namespace }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          debug: false
+          overwrite: true
+          parameters:
+            -p NAME="${{ github.event.repository.name }}"
+            -p ZONE="${{ inputs.target }}"
+            -p SLOT="${{ inputs.slot || inputs.target }}"
+          triggers: ${{ inputs.triggers }}
+
+      - name: Vanity Route (PROD)
+        if: ${{ inputs.target == 'prod' }}
+        uses: bcgov/action-deployer-openshift@bb9d143f4f03187239580c17c4b77da04cdb6e66 # v4.2.2
+        env:
+          VANITY_TLS_CERTIFICATE: ${{ secrets.vanity_tls_certificate }}
+          VANITY_TLS_KEY: ${{ secrets.vanity_tls_key }}
+          VANITY_TLS_CA_CERTIFICATE: ${{ secrets.vanity_tls_ca_certificate }}
+        with:
+          file: ${{ runner.temp }}/isp-deploy/vanity-route.yml
+          oc_namespace: ${{ secrets.oc_namespace }}
+          oc_server: ${{ vars.oc_server }}
+          oc_token: ${{ secrets.oc_token }}
+          debug: false
+          overwrite: true
+          parameters:
+            -p NAME="${{ github.event.repository.name }}"
+            -p ZONE="${{ inputs.target }}"
+            -p VANITY_HOST="$VANITY_HOST"
+            -p VANITY_TLS_CERTIFICATE="$VANITY_TLS_CERTIFICATE"
+            -p VANITY_TLS_KEY="$VANITY_TLS_KEY"
+            -p VANITY_TLS_CA_CERTIFICATE="$VANITY_TLS_CA_CERTIFICATE"
+            $OC_PROCESS_FLAGS
+
+      - name: Verify frontend Route admission
+        if: ${{ steps.deploy.outputs.triggered == 'true' }}
+        env:
+          OC_NAMESPACE: ${{ secrets.oc_namespace }}
+          APP_NAME: ${{ github.event.repository.name }}
+          TARGET: ${{ inputs.target }}
+          SLOT: ${{ inputs.slot || inputs.target }}
+        run: |
+          service_name="${APP_NAME}-frontend-${TARGET}"
+          route_name="$service_name"
+          route_host="${APP_NAME}-${SLOT}.apps.gold.devops.gov.bc.ca"
+          if [ "$TARGET" = prod ]; then
+            route_name="${service_name}-vanity"
+            route_host="$VANITY_HOST"
+          fi
+          # The shared deployer leaves its authenticated oc context available to later steps.
+          bash "$RUNNER_TEMP/isp-deploy/verify-route.sh" "$OC_NAMESPACE" "$route_name" "$route_host" "$service_name"
+
+  deployment-result:
+    name: Record deployment result
+    needs: [backend, frontend]
+    if: ${{ always() }}
+    environment:
+      name: ${{ inputs.environment }}
+      # Release PROD records the tagged commit, rather than the dispatcher's main SHA.
+      deployment: ${{ inputs.environment != 'prod' }}
+    runs-on: ubuntu-slim
+    timeout-minutes: 1
+    permissions: {}
+    steps:
+      - name: Fail incomplete deployments
+        if: ${{ needs.backend.result != 'success' || needs.frontend.result != 'success' }}
+        run: |
+          echo "Backend deployment result: ${{ needs.backend.result }}"
+          echo "Frontend deployment result: ${{ needs.frontend.result }}"
+          exit 1
+
+      - name: Confirm deployment
+        run: echo "Backend and frontend deployments succeeded."

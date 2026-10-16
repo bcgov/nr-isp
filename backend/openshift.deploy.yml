@@ -1,245 +1,280 @@
+---
+# Backend deploy Template — consumed by `oc process` in .github/workflows/reusable-deploy.yml.
 apiVersion: template.openshift.io/v1
 kind: Template
+metadata:
+  name: nr-isp-backend-deploy
 parameters:
   - name: NAME
-    description: Module name
-    required: true
-  - name: COMPONENT
-    description: Component name
-    value: backend
+    description: App name prefix
+    value: nr-isp
   - name: ZONE
-    description: Deployment zone, e.g. pr-### or prod
+    description: PR number, 'test', or 'prod'
     required: true
-  - name: IMAGE_TAG
-    description: Image tag to use
+  - name: IMAGE_REF
+    description: Complete container image reference (tag for PR previews, digest for releases)
     required: true
-  - name: REGISTRY
-    description: Container registry to import from
-    value: ghcr.io
-  - name: ORG_NAME
-    description: Organization name
-    value: bcgov
-  - name: DOMAIN
-    value: apps.silver.devops.gov.bc.ca
+  - name: ROLLOUT_TRIGGER
+    description: Value placed on pod templates to force rollout when a reused image tag is rebuilt
+    value: ""
+  - name: SPRING_PROFILES_ACTIVE
+    value: oracle
   - name: MIN_REPLICAS
-    description: The minimum amount of replicas for the horizontal pod autoscaler.
-    value: "2"
+    value: "1"
   - name: MAX_REPLICAS
-    description: The maximum amount of replicas for the horizontal pod autoscaler.
-    value: "5"
-  - name: CPU_REQUEST
-    value: "100m"
-  - name: MEMORY_REQUEST
-    value: "128Mi"
-  - name: MEMORY_LIMIT
-    description: Memory limit for the container (bounds the pod's working set).
-    value: "4Gi"
-  - name: LOG_LEVEL
-    description: Application log level (debug|info|warn|error)
-    value: "info"
+    value: "3"
+  - name: MIN_CPU
+    value: "200m"
+  - name: MIN_MEM
+    value: "500Mi"
+  - name: MAX_CPU
+    value: "1000m"
+  - name: MAX_MEM
+    value: "800Mi"
+  # Container timezone used by the JVM default zone.
+  - name: TZ
+    value: America/Vancouver
+  - name: APP_LOG_LEVEL
+    value: INFO
+  - name: SPRING_SECURITY_LOG_LEVEL
+    value: INFO
+  - name: SPRING_WEB_LOG_LEVEL
+    value: INFO
+  - name: ISP_OIDC_ISSUER_URI
+    description: BC Gov SSO issuer for interactive users
+    required: true
+  - name: ISP_OIDC_CLIENT_ID
+    description: Expected public browser client ID (azp) for interactive access tokens
+    required: true
+  - name: ALLOWED_ORIGINS
+    description: Comma-separated browser origins allowed to call the backend directly; the SPA uses the same-origin Caddy proxy
+    value: ""
+  - name: DATABASE_HOST
+    required: true
+  - name: DATABASE_SERVICE_NAME
+    required: true
+  - name: DATABASE_USER
+    required: true
+  - name: DATABASE_PASSWORD
+    required: true
+  - name: KEYSTORE_SECRET
+    required: true
+
 objects:
   - apiVersion: apps/v1
     kind: Deployment
     metadata:
+      name: ${NAME}-backend-${ZONE}
       labels:
-        app: ${NAME}-${ZONE}
-      name: ${NAME}-${ZONE}-${COMPONENT}
+        app: ${NAME}-backend-${ZONE}
+        app.kubernetes.io/name: ${NAME}-backend
+        app.kubernetes.io/instance: ${ZONE}
     spec:
+      replicas: ${{MIN_REPLICAS}}
       selector:
         matchLabels:
-          deployment: ${NAME}-${ZONE}-${COMPONENT}
+          app: ${NAME}-backend-${ZONE}
+      # Replace one replica at a time so a rollout does not require additional namespace quota.
       strategy:
         type: RollingUpdate
         rollingUpdate:
           maxUnavailable: 1
-          maxSurge: 1
+          maxSurge: 0
       template:
         metadata:
           labels:
-            app: ${NAME}-${ZONE}
-            deployment: ${NAME}-${ZONE}-${COMPONENT}
+            app: ${NAME}-backend-${ZONE}
+            app.kubernetes.io/name: ${NAME}-backend
+            app.kubernetes.io/instance: ${ZONE}
+          annotations:
+            app.openshift.io/redeploy-token: ${ROLLOUT_TRIGGER}
         spec:
-          terminationGracePeriodSeconds: 30
-          affinity:
-            podAntiAffinity:
-              preferredDuringSchedulingIgnoredDuringExecution:
-                - weight: 100
-                  podAffinityTerm:
-                    labelSelector:
-                      matchLabels:
-                        deployment: ${NAME}-${ZONE}-${COMPONENT}
-                    topologyKey: kubernetes.io/hostname
+          terminationGracePeriodSeconds: 90
+          automountServiceAccountToken: false
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector:
+                matchLabels:
+                  app: ${NAME}-backend-${ZONE}
+          securityContext:
+            runAsNonRoot: true
           initContainers:
-            - name: wait-for-db
-              image: ${REGISTRY}/${ORG_NAME}/${NAME}/migrations:${IMAGE_TAG}
-              command:
-                - /bin/sh
-                - -c
-                - |
-                  echo "Waiting for database to be reachable..."
-                  max_retries=30
-                  attempt=1
-                  until nc -z -v -w3 ${NAME}-${ZONE}-database 5432; do
-                    if [ "$attempt" -ge "$max_retries" ]; then
-                      echo "ERROR: Database ${NAME}-${ZONE}-database:5432 is not reachable after ${max_retries} attempts." >&2
-                      exit 1
-                    fi
-                    echo "Database not ready (attempt ${attempt}/${max_retries}), sleeping..."
-                    attempt=$((attempt + 1))
-                    sleep 2
-                  done
-                  echo "Database is UP!"
-              securityContext:
-                allowPrivilegeEscalation: false
-                runAsNonRoot: true
-                readOnlyRootFilesystem: true
-                capabilities:
-                  drop: ["ALL"]
-                seccompProfile:
-                  type: RuntimeDefault
-              volumeMounts:
-                - name: tmp
-                  mountPath: /tmp
-            - name: migrations
-              image: ${REGISTRY}/${ORG_NAME}/${NAME}/migrations:${IMAGE_TAG}
+            # Builds the Oracle TCPS truststore for DATABASE_HOST, as nr-lexis and nr-forest-client do.
+            - name: ${NAME}-backend-init
+              image: ghcr.io/bcgov/nr-forest-client/common:prod
               imagePullPolicy: Always
               env:
-                - name: POSTGRES_DATABASE
+                - name: ORACLEDB_HOST
+                  value: ${DATABASE_HOST}
+                - name: ORACLEDB_SECRET
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-name
-                - name: FLYWAY_URL
-                  value: jdbc:postgresql://${NAME}-${ZONE}-database:5432/$(POSTGRES_DATABASE)
-                - name: FLYWAY_USER
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-user
-                - name: FLYWAY_PASSWORD
-                  valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-password
-                - name: FLYWAY_DEFAULT_SCHEMA
-                  value: "users"
-                - name: FLYWAY_BASELINE_ON_MIGRATE
-                  value: "true"
+                      name: ${NAME}-backend-secret-${ZONE}
+                      key: KEYSTORE_SECRET
+                - name: ORACLEDB_PORT
+                  value: "1543"
+              volumeMounts:
+                - name: api-cert
+                  mountPath: /cert
+                - name: init-tmp-storage
+                  mountPath: /tmp
               resources:
                 requests:
-                  cpu: 10m
-                  memory: 50Mi
+                  cpu: "200m"
+                  memory: "300Mi"
+                  ephemeral-storage: "50Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "500Mi"
+                  ephemeral-storage: "100Mi"
               securityContext:
                 allowPrivilegeEscalation: false
                 runAsNonRoot: true
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop: ["ALL"]
-                seccompProfile:
-                  type: RuntimeDefault
-              volumeMounts:
-                - name: tmp
-                  mountPath: /tmp
           containers:
-            - name: ${NAME}
-              image: ${REGISTRY}/${ORG_NAME}/${NAME}/${COMPONENT}:${IMAGE_TAG}
+            - name: ${NAME}-backend
+              image: ${IMAGE_REF}
               imagePullPolicy: Always
               ports:
-                - name: http
-                  containerPort: 3000
+                - containerPort: 8080
+                  protocol: TCP
               env:
-                - name: LOG_LEVEL
-                  value: ${LOG_LEVEL}
-                - name: POSTGRES_HOST
-                  value: ${NAME}-${ZONE}-database
-                - name: POSTGRES_PORT
-                  value: "5432"
-                - name: POSTGRES_DATABASE
+                - name: TZ
+                  value: ${TZ}
+                - name: SPRING_PROFILES_ACTIVE
+                  value: ${SPRING_PROFILES_ACTIVE}
+                - name: ISP_REQUIRE_ORACLE_PROFILE
+                  value: "true"
+                - name: SERVER_PORT
+                  value: "8080"
+                - name: HOME
+                  value: /tmp
+                - name: XDG_CACHE_HOME
+                  value: /tmp/.cache
+                - name: ISP_OIDC_ISSUER_URI
+                  value: ${ISP_OIDC_ISSUER_URI}
+                - name: ISP_OIDC_CLIENT_ID
+                  value: ${ISP_OIDC_CLIENT_ID}
+                - name: ALLOWED_ORIGINS
+                  value: ${ALLOWED_ORIGINS}
+                - name: DATABASE_HOST
+                  value: ${DATABASE_HOST}
+                - name: DATABASE_SERVICE_NAME
+                  value: ${DATABASE_SERVICE_NAME}
+                - name: DATABASE_USER
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-name
-                - name: POSTGRES_USER
+                      name: ${NAME}-backend-secret-${ZONE}
+                      key: DATABASE_USER
+                - name: DATABASE_PASSWORD
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-user
-                - name: POSTGRES_PASSWORD
+                      name: ${NAME}-backend-secret-${ZONE}
+                      key: DATABASE_PASSWORD
+                - name: KEYSTORE_SECRET
                   valueFrom:
                     secretKeyRef:
-                      name: ${NAME}-${ZONE}-database
-                      key: database-password
-                - name: POSTGRES_SCHEMA
-                  value: "users"
+                      name: ${NAME}-backend-secret-${ZONE}
+                      key: KEYSTORE_SECRET
+                - name: APP_LOG_LEVEL
+                  value: ${APP_LOG_LEVEL}
+                - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_SECURITY
+                  value: ${SPRING_SECURITY_LOG_LEVEL}
+                - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB
+                  value: ${SPRING_WEB_LOG_LEVEL}
               resources:
                 requests:
-                  cpu: ${CPU_REQUEST}
-                  memory: ${MEMORY_REQUEST}
+                  cpu: ${MIN_CPU}
+                  memory: ${MIN_MEM}
+                  ephemeral-storage: "256Mi"
                 limits:
-                  memory: ${MEMORY_LIMIT}
-              securityContext:
-                allowPrivilegeEscalation: false
-                runAsNonRoot: true
-                readOnlyRootFilesystem: true
-                capabilities:
-                  drop: ["ALL"]
-                seccompProfile:
-                  type: RuntimeDefault
-              volumeMounts:
-                - name: tmp
-                  mountPath: /tmp
-              startupProbe:
-                httpGet:
-                  path: /api/health
-                  port: http
-                periodSeconds: 5
-                failureThreshold: 30
-              readinessProbe:
-                httpGet:
-                  path: /api/health
-                  port: http
-                periodSeconds: 5
-                failureThreshold: 3
-              livenessProbe:
-                httpGet:
-                  path: /api
-                  port: http
-                periodSeconds: 10
-                failureThreshold: 3
+                  cpu: ${MAX_CPU}
+                  memory: ${MAX_MEM}
+                  ephemeral-storage: "2Gi"
+              # Keep serving normally while the Service removes this pod; Spring's graceful shutdown
+              # answers every request with 503 once SIGTERM arrives. The sleep counts against
+              # terminationGracePeriodSeconds (10s here + 60s shutdown phase < 90s).
               lifecycle:
                 preStop:
                   exec:
-                    # distroless/nodejs has no /bin/sleep; exec hooks skip image ENTRYPOINT
-                    command: ["/nodejs/bin/node", "-e", "setTimeout(() => {}, 10000)"]
+                    command: ["sleep", "10"]
+              startupProbe:
+                httpGet:
+                  path: /actuator/health/liveness
+                  port: 8080
+                periodSeconds: 5
+                timeoutSeconds: 3
+                failureThreshold: 60
+                successThreshold: 1
+              livenessProbe:
+                httpGet:
+                  path: /actuator/health/liveness
+                  port: 8080
+                periodSeconds: 15
+                timeoutSeconds: 3
+                failureThreshold: 3
+                successThreshold: 1
+              readinessProbe:
+                httpGet:
+                  path: /actuator/health/readiness
+                  port: 8080
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 3
+                successThreshold: 1
+              volumeMounts:
+                - name: api-cert
+                  mountPath: /cert
+                  readOnly: true
+                - name: tmp-storage
+                  mountPath: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
           volumes:
-            - name: tmp
-              emptyDir:
-                medium: Memory
-                sizeLimit: 256Mi
+            - name: tmp-storage
+              emptyDir: {}
+            - name: init-tmp-storage
+              emptyDir: {}
+            # The init container generates the truststore for DATABASE_HOST on every pod.
+            # Per-pod storage prevents stale certificates and concurrent shared writes.
+            - name: api-cert
+              emptyDir: {}
+
   - apiVersion: v1
     kind: Service
     metadata:
+      name: ${NAME}-backend-${ZONE}
       labels:
-        app: ${NAME}-${ZONE}
-      name: ${NAME}-${ZONE}-${COMPONENT}
+        app: ${NAME}-backend-${ZONE}
+        app.kubernetes.io/instance: ${ZONE}
     spec:
-      ports:
-        - name: http
-          port: 80
-          targetPort: 3000
       selector:
-        deployment: ${NAME}-${ZONE}-${COMPONENT}
+        app: ${NAME}-backend-${ZONE}
+      ports:
+        - name: 8080-tcp
+          port: 8080
+          protocol: TCP
+
   - apiVersion: autoscaling/v2
     kind: HorizontalPodAutoscaler
     metadata:
+      name: ${NAME}-backend-${ZONE}-cpu
       labels:
-        app: ${NAME}-${ZONE}
-      name: ${NAME}-${ZONE}-${COMPONENT}
+        app: ${NAME}-backend-${ZONE}
+        app.kubernetes.io/instance: ${ZONE}
     spec:
       scaleTargetRef:
         apiVersion: apps/v1
         kind: Deployment
-        name: ${NAME}-${ZONE}-${COMPONENT}
+        name: ${NAME}-backend-${ZONE}
       minReplicas: ${{MIN_REPLICAS}}
       maxReplicas: ${{MAX_REPLICAS}}
       metrics:
@@ -248,30 +283,57 @@ objects:
             name: cpu
             target:
               type: Utilization
-              averageUtilization: 80
+              averageUtilization: 70
       behavior:
         scaleUp:
-          stabilizationWindowSeconds: 30
+          stabilizationWindowSeconds: 0
           policies:
             - type: Percent
               value: 100
+              periodSeconds: 60
+            - type: Pods
+              value: 2
               periodSeconds: 60
           selectPolicy: Max
         scaleDown:
           stabilizationWindowSeconds: 300
           policies:
             - type: Percent
-              value: 50
+              value: 25
               periodSeconds: 60
-          selectPolicy: Max
-  - apiVersion: policy/v1
-    kind: PodDisruptionBudget
+
+  - apiVersion: v1
+    kind: Secret
     metadata:
+      name: ${NAME}-backend-secret-${ZONE}
       labels:
-        app: ${NAME}-${ZONE}
-      name: ${NAME}-${ZONE}-${COMPONENT}
+        app: ${NAME}-backend-${ZONE}
+        app.kubernetes.io/instance: ${ZONE}
+    type: Opaque
+    stringData:
+      DATABASE_USER: ${DATABASE_USER}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      KEYSTORE_SECRET: ${KEYSTORE_SECRET}
+
+  # No public Route: only the frontend's Caddy proxy and the monitoring namespace reach the API.
+  - apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: ${NAME}-backend-${ZONE}-ingress
+      labels:
+        app: ${NAME}-backend-${ZONE}
+        app.kubernetes.io/instance: ${ZONE}
     spec:
-      maxUnavailable: 1
-      selector:
+      podSelector:
         matchLabels:
-          deployment: ${NAME}-${ZONE}-${COMPONENT}
+          app: ${NAME}-backend-${ZONE}
+      ingress:
+        - from:
+            - podSelector:
+                matchLabels:
+                  app: ${NAME}-frontend-${ZONE}
+            - namespaceSelector:
+                matchLabels:
+                  network.openshift.io/policy-group: monitoring
+      policyTypes:
+        - Ingress

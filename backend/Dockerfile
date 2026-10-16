@@ -1,35 +1,38 @@
-# Build
-FROM node:24.21.0-slim AS build
+FROM maven:3.9.9-amazoncorretto-21-alpine AS build
+WORKDIR /workspace/app
 
-# Copy, build static files; see .dockerignore for exclusions
-WORKDIR /app
-COPY . ./
-ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
-RUN npm run deploy
+COPY pom.xml .
+COPY src src
+RUN mvn -B package -DskipTests
+RUN mkdir -p target/dependency && (cd target/dependency; jar -xf ../*.jar)
 
-# Dependencies
-FROM node:24.21.0-slim AS dependencies
+FROM eclipse-temurin:21.0.12_8-jdk-alpine-3.23
 
-# Copy, build static files; see .dockerignore for exclusions
-WORKDIR /app
-COPY . ./
-ENV PRISMA_CLI_BINARY_TARGETS=debian-openssl-3.0.x
-RUN npm ci --ignore-scripts --no-update-notifier --omit=dev
+# Check the runtime JDK itself: the Maven build stage and CI use separate JDKs.
+COPY checks/VerifyTimezone.java /tmp/VerifyTimezone.java
+RUN java /tmp/VerifyTimezone.java && rm /tmp/VerifyTimezone.java
 
-# Deploy using minimal Distroless image
-FROM gcr.io/distroless/nodejs24-debian12:nonroot
-ENV NODE_ENV=production
+ENV HOME=/tmp \
+    XDG_CACHE_HOME=/tmp/.cache
 
-# Copy app and dependencies
-WORKDIR /app
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=build /app/generated ./generated
-COPY --from=build /app/dist ./dist
+# DejaVu fonts give the embedded JasperReports renderer a font set once reports are ported.
+RUN apk add --no-cache font-dejavu \
+    && adduser -D -s /bin/sh spring
+USER spring
+VOLUME /tmp
+ARG DEPENDENCY=/workspace/app/target/dependency
+COPY --from=build ${DEPENDENCY}/BOOT-INF/lib /app/lib
+COPY --from=build ${DEPENDENCY}/META-INF /app/META-INF
+COPY --from=build ${DEPENDENCY}/BOOT-INF/classes /app
 
-# Boilerplate, not used in OpenShift/Kubernetes
-EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=3s CMD curl -f http://localhost:3000/api
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=5 \
+  CMD wget -q -O /dev/null http://127.0.0.1:8080/actuator/health/liveness || exit 1
 
-# Nonroot user; Node 24 automatically respects cgroup memory limits
-USER nonroot
-CMD ["/app/dist/main"]
+# Java 21 is container-aware. Deployments can replace JAVA_TOOL_OPTIONS when a different heap split
+# is required; these defaults leave native and report-rendering headroom within the pod limit.
+ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=20.0 -XX:MaxRAMPercentage=60.0"
+
+# Log timestamps and other JVM default-zone consumers use the TZ environment variable set by
+# openshift.deploy.yml. The JDK includes the named-zone data, so no OS tzdata package is required.
+# Do not add -Duser.timezone here because it would override the deployment setting.
+ENTRYPOINT ["java","-Duser.name=ISP-API","-Duser.home=/tmp","-Djava.io.tmpdir=/tmp","-Djava.awt.headless=true","-XX:+UseParallelGC","-XX:MinHeapFreeRatio=20","-XX:MaxHeapFreeRatio=40","-XX:GCTimeRatio=4","-XX:AdaptiveSizePolicyWeight=90","-XX:ParallelGCThreads=2","-Djava.util.concurrent.ForkJoinPool.common.parallelism=8","-XX:CICompilerCount=2","-XX:+ExitOnOutOfMemoryError","-Djava.security.egd=file:/dev/./urandom","-cp","app:app/lib/*","ca.bc.gov.nrs.isp.IspApiApplication"]
