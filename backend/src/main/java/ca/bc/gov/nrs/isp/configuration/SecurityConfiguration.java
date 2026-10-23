@@ -15,6 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.savedrequest.NullRequestCache;
 import org.springframework.web.cors.CorsConfiguration;
@@ -36,7 +37,8 @@ public class SecurityConfiguration {
   private String allowedOrigins;
 
   @Bean
-  public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain filterChain(
+      HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
     http
         // Bearer tokens are sent explicitly by the SPA and never as cookies, so CSRF does not apply.
         .csrf(AbstractHttpConfigurer::disable)
@@ -47,7 +49,10 @@ public class SecurityConfiguration {
         // The SPA performs OAuth redirects; this bearer API never replays a saved login request.
         .requestCache(cache -> cache.requestCache(new NullRequestCache()))
         .cors(Customizer.withDefaults())
-        .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()));
+        // FAM client roles become ISP authorities (IspJwtConfiguration). Wired explicitly rather
+        // than relying on Spring's lookup of a converter bean.
+        .oauth2ResourceServer(
+            oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)));
 
     http.authorizeHttpRequests(
         authorize ->

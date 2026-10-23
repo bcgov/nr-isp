@@ -36,10 +36,10 @@ public class IspJwtConfiguration {
 
   @Bean
   JwtDecoder jwtDecoder(IspAuthProperties properties) {
-    String issuerUri = requireAbsoluteUri(normalizeIssuerUri(properties.issuerUri()), "isp.auth.oidc.issuer-uri");
+    String issuerUri = requireHttpsUri(normalizeIssuerUri(properties.issuerUri()), "isp.auth.oidc.issuer-uri");
     String clientId = requireClientId(properties.clientId());
     String jwkSetUri =
-        requireAbsoluteUri(
+        requireHttpsUri(
             StringUtils.hasText(properties.jwkSetUri())
                 ? properties.jwkSetUri()
                 : issuerUri + "/protocol/openid-connect/certs",
@@ -100,7 +100,8 @@ public class IspJwtConfiguration {
     return clientId.trim();
   }
 
-  private static String requireAbsoluteUri(String value, String propertyName) {
+  /** Tokens are trusted only from keys fetched over TLS: no plain HTTP, file or other schemes. */
+  private static String requireHttpsUri(String value, String propertyName) {
     if (!StringUtils.hasText(value)) {
       throw new IllegalStateException(propertyName + " must be configured");
     }
@@ -108,10 +109,10 @@ public class IspJwtConfiguration {
     try {
       uri = URI.create(value.trim());
     } catch (IllegalArgumentException exception) {
-      throw new IllegalStateException(propertyName + " must be a valid absolute URI", exception);
+      throw new IllegalStateException(propertyName + " must be a valid https URI", exception);
     }
-    if (!uri.isAbsolute()) {
-      throw new IllegalStateException(propertyName + " must be an absolute URI");
+    if (!"https".equalsIgnoreCase(uri.getScheme()) || !StringUtils.hasText(uri.getHost())) {
+      throw new IllegalStateException(propertyName + " must be an https URI with a host");
     }
     return value.trim();
   }

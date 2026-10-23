@@ -17,7 +17,26 @@ class IspJwtConfigurationTest {
         .hasMessageContaining("isp.auth.oidc.issuer-uri");
     assertThatThrownBy(() -> configuration.jwtDecoder(new IspAuthProperties("/relative", null, "isp")))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("absolute");
+        .hasMessageContaining("https");
+  }
+
+  @Test
+  void requiresHttpsForTheIssuerAndSigningKeys() {
+    for (String issuer :
+        new String[] {"http://sso.example.test/realms/standard", "file:///etc/realms/standard"}) {
+      assertThatThrownBy(() -> configuration.jwtDecoder(new IspAuthProperties(issuer, null, "isp")))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("isp.auth.oidc.issuer-uri must be an https URI");
+    }
+    assertThatThrownBy(
+            () ->
+                configuration.jwtDecoder(
+                    new IspAuthProperties(
+                        "https://sso.example.test/realms/standard",
+                        "http://sso.example.test/realms/standard/protocol/openid-connect/certs",
+                        "isp")))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("isp.auth.oidc.jwk-set-uri must be an https URI");
   }
 
   @Test
