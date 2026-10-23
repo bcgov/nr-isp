@@ -25,6 +25,7 @@
     <maven.compiler.version>3.10.1</maven.compiler.version>
     <jacoco.version>0.8.15</jacoco.version>
     <ojdbc.version>21.3.0.0</ojdbc.version>
+    <openpdf.version>2.4.0</openpdf.version>
     <!-- Remove once the Spring Boot BOM includes these security fixes. -->
     <jackson-bom.version>2.21.7</jackson-bom.version>
   </properties>
@@ -74,6 +75,12 @@
       <artifactId>ojdbc11</artifactId>
       <version>${ojdbc.version}</version>
     </dependency>
+    <dependency>
+      <!-- Table exports as PDF. LGPL/MPL licensed, where iText 7 is AGPL. -->
+      <groupId>com.github.librepdf</groupId>
+      <artifactId>openpdf</artifactId>
+      <version>${openpdf.version}</version>
+    </dependency>
 
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -83,6 +90,12 @@
     <dependency>
       <groupId>org.springframework.security</groupId>
       <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Repository tests run their SQL against H2 in Oracle compatibility mode. -->
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

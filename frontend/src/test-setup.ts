@@ -29,6 +29,9 @@ if (!window.matchMedia) {
   })
 }
 
+// jsdom does not scroll; pages scroll to their error banners (scrollToNotification).
+Object.defineProperty(window, 'scrollTo', { configurable: true, writable: true, value: () => {} })
+
 afterEach(() => {
   cleanup()
   window.sessionStorage.clear()

@@ -69,7 +69,37 @@ default because the SPA calls the API through the same-origin Caddy proxy.
 Oracle remains the system of record. The `oracle` Spring profile enables a Hikari pool over TCPS;
 an init container builds the truststore for `DATABASE_HOST` on every pod. Repositories use
 `NamedParameterJdbcTemplate` with hand-written SQL, as the CGI rebuild does; there is no JPA. Audit
-columns (`entry_userid`, `update_userid`) take the IDIR username from the token.
+columns (`entry_userid`, `update_userid`) take the IDIR username from the token
+(`IspUser.requiredUsername()`); a write from a token without one is refused with a 401.
+
+Oracle `DATE` columns hold B.C. wall-clock time. The API returns timestamps with the JVM's offset
+(`TZ=America/Vancouver`), for example `2024-03-04T10:00:00-08:00`, so they name the instant they
+were written.
+
+## Porting pattern
+
+Mill names (`/mills`) is the first ported page and the pattern for the rest.
+
+| Layer | Pattern |
+|---|---|
+| Controller | `@RestController` mapped without `/api`, keeping the CGI rebuild's paths. It takes an `ObjectProvider` for each service and calls `OracleServices.require`, so without the `oracle` profile the API still starts and the endpoint answers 503. Every write, deletes included, takes `IspUser.from(authentication).requiredUsername()` and passes it to the service. |
+| DTOs | Hand-written records in `dto`, with Jakarta validation matching the CGI rebuild's OpenAPI schemas and the column lengths. JSON field names and date formats are unchanged. |
+| Service | `@Service @Profile("oracle")` holding the business rules, `@Transactional`. Rejected input throws `ValidationConstraintViolationException`. |
+| Repository | `@Repository @Profile("oracle")`, `NamedParameterJdbcTemplate`, SQL and row mapping in one class that returns the DTO records; no entities or mappers. |
+| Errors | `ApiExceptionHandler` returns validation failures, business rules and database constraint violations as a 400 with a plain-text message, which the page shows as-is. Anything else keeps Spring Boot's JSON error body. |
+| Tests | Repositories run their SQL against H2 in Oracle mode (`db/isp-schema.sql`); services use Mockito; controllers use MockMvc with a mocked service; `MillsEndToEndTest` runs the `oracle` wiring against H2. `SecurityConfigurationTest` owns the role rules. |
+| Frontend | A page under `src/pages`, lazy-loaded from `PAGES` in `AppRoutes.tsx`; an API client in `src/service` built on `apiFetch`; and the CGI rebuild's shared components under `src/components/common`. |
+
+The CGI rebuild generated Spring interfaces and DTOs from an OpenAPI spec. They are not carried
+over: hand-written records are shorter than the generated models, need no build-time generation
+step, and match nr-lexis. The CGI rebuild's spec (`backend/src/main/resources/openapi`) remains the
+reference for each endpoint's contract when porting; publishing a spec from the code (springdoc)
+can follow if a consumer needs one.
+
+The frontend uses plain Carbon rather than the CGI rebuild's `@bcgov-nr/nr-theme`, as nr-lexis
+does. That package only supplied design tokens and component colour overrides; ported styles use
+Carbon tokens (`var(--cds-...)`) instead of fixed colours, so the white and g100 themes both work
+without per-theme rules.
 
 ## Deployment and operations
 
@@ -112,6 +142,9 @@ out of the Service at once; startup still fails fast without Oracle.
 | Configuration | Ansible templates and Vault | OpenShift template parameters from GitHub Environments |
 | Pipeline | Polaris workflows, Jenkins and Ansible | GitHub Actions and OpenShift templates |
 | Local auth | Mock login with fake roles | Real SSO; no mock users in the backend |
+| API models | Generated from OpenAPI, plus Lombok entities and MapStruct mappers | Hand-written records |
+| PDF exports | iText 7 (AGPL) | OpenPDF (LGPL/MPL) |
+| Theme | `@bcgov-nr/nr-theme` tokens and overrides | Carbon tokens |
 
 ## Porting status
 
@@ -122,18 +155,28 @@ Done:
 - React frontend scaffold: IDIR sign-in, session loading, no-access and error pages, layout and the
   CGI rebuild's navigation, with each page a placeholder until ported.
 - Images, OpenShift templates, PR preview, TEST and PROD workflows.
+- Mill names (`/mills`): list, filter, add, edit, delete and CSV/PDF export, with
+  `GET /api/isp-sell-price-zone-codes` for its zone choices. Ported with it: `ReusableDataTable`,
+  `MultiSelectWithTags`, `Dropdown`, `PageNotifications`, the toast region and their hooks and
+  helpers. Changes from the CGI rebuild: CSV exports quote every text field (a comma in a mill
+  name or comment no longer shifts the columns), exports send `Content-Disposition: attachment`
+  rather than `form-data`, a failed initial load shows an error instead of an empty page, and new
+  effective dates use the browser's local date rather than UTC.
 
 Still to do:
 
 - Port the business pages, controllers, services and repositories: inbox, search, sales summary,
-  mills, the maintenance tables, the range checks and the R10–R13 reports.
-- OpenAPI generation, if the generated interfaces and DTOs are kept.
+  the other maintenance tables, the range checks and the R10–R13 reports. `GET
+  /api/mill-report-status-codes` and `GET /api/mill-report-flag` were in the CGI rebuild's
+  `MillsApiController` but serve the inbox and sales summary, so they move with those pages.
 - Reports: R13 renders in-process from JRXML in the CGI rebuild; R10–R12 call the JCRS Jasper
   server. Embedded JasperReports for all four is in scope; add it with the first ported report.
 - Mill submission ingestion from Oracle AQ (`MOF_QUEUES.ISP_Q`) and status messages to
   `MOF_QUEUES.ESF_STATUS_Q` ("ESF lift and shift"). This needs a second, raw Oracle connection and
   a decision on how one replica consumes the queue.
-- Reference-data caching (Caffeine in the CGI rebuild).
+- Reference-data caching (Caffeine in the CGI rebuild), starting with the sell price zone codes.
+- Optimistic locking: the CGI rebuild's saves ignore `REVISION_COUNT`, so the last of two
+  concurrent edits wins. The mill names port keeps that behaviour.
 - Session idle timeout, as nr-lexis has.
 - FAM and CSS setup: the ISP client in each SSO environment, the two roles in FAM, and redirect
   URIs for the preview slots, TEST and the PROD vanity host.

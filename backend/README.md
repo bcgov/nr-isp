@@ -24,7 +24,7 @@ mvn verify   # unit and security tests, JaCoCo report in target/site/jacoco
 
 | Profile | Effect |
 |---|---|
-| (none) | API only. Datasource auto-configuration is off, so no database is needed. |
+| (none) | API only. Datasource auto-configuration is off, so no database is needed and endpoints that need it answer 503. |
 | `oracle` | Enables the Oracle datasource, `JdbcTemplate` and `NamedParameterJdbcTemplate`; startup fails if Oracle is unreachable. |
 | `local` | Loads the gitignored `application-local.yml`. |
 | `test` | Used by tests; supplies a placeholder SSO issuer and client ID. |
@@ -56,11 +56,17 @@ The API refuses to start without the SSO issuer and client ID, so it never runs 
 | `ca.bc.gov.nrs.isp` | `IspApiApplication` |
 | `configuration` | `/api` prefix, security rules and CORS, Oracle datasource checks, settings records |
 | `security` | Token validation, FAM role mapping, `IspRoles`, `IspUser` |
-| `controller` | REST controllers. Map them without `/api`; `ApiPathConfiguration` adds it. |
+| `controller` | REST controllers. Map them without `/api`; `ApiPathConfiguration` adds it. `ApiExceptionHandler` turns rejected input into plain-text 400s. |
+| `dto` | Request and response records |
+| `service` | Business rules, `@Profile("oracle")` |
+| `repository` | `NamedParameterJdbcTemplate` and SQL, `@Profile("oracle")` |
+| `exception` | `ValidationConstraintViolationException` for business-rule failures |
 
-Port business code into `controller`, `service` and `repository` packages, keeping the CGI
-rebuild's endpoint paths. `SecurityConfiguration` already holds its access rules; a new endpoint
-needs a rule change only when it departs from "Approvers read, Administrators write".
+Port business code into these packages, keeping the CGI rebuild's endpoint paths; the mill names
+classes (`MillController`, `MillService`, `MillRepository` and their tests) are the worked example,
+described under "Porting pattern" in [docs/architecture.md](../docs/architecture.md).
+`SecurityConfiguration` already holds its access rules; a new endpoint needs a rule change only
+when it departs from "Approvers read, Administrators write".
 
 ## B.C. Pacific Time
 

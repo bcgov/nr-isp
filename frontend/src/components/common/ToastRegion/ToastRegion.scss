@@ -1,0 +1,54 @@
+/* Floating stack of action confirmations, anchored below the fixed Carbon header.
+
+   z-index sits above both the header (8000) and Modal (9000) so a confirmation
+   fired from inside a modal — e.g. the delete confirmations in ReusableDataTable
+   and SalesSummaryPage — is still visible. */
+.isp-toast-region {
+  position: fixed;
+  top: 4rem;
+  right: 1.5rem;
+  left: auto;
+  z-index: 9100;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  /* Carbon sizes a toast at 18rem. Without an explicit width the fixed container
+       shrink-wraps to nothing and the toasts overflow off the right of the screen. */
+  width: 18rem;
+  /* A percentage on a fixed element resolves against the viewport minus its
+       scrollbar; 100vw includes the scrollbar and so can push the region off-screen. */
+  max-width: calc(100% - 3rem);
+  /* The container spans the gaps between toasts, so let clicks fall through it and
+       re-enable pointer events only on the toasts themselves. */
+  pointer-events: none;
+}
+
+/* Carbon hard-codes `inline-size: 18rem` on a toast. Left alone it refuses to shrink,
+   so any time the region is narrower than that — a small window, a zoomed-in browser,
+   a long message — the toast overhangs the right edge and takes its close button off
+   screen with it. Forcing it to track the container makes that impossible. */
+.isp-toast-region .isp-toast-region__toast {
+  pointer-events: auto;
+  margin: 0;
+  inline-size: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Deliberately no entrance animation. The toast's resting state is fully visible, so it
+   can never be left invisible by an animation that fails to run — an earlier version was
+   held at a hidden first frame (translateX(100%); opacity: 0) and never appeared at all.
+   Same reasoning as the instant scroll in scrollToNotification: nothing load-bearing
+   should depend on motion. */
+
+/* On narrow viewports span the width rather than keeping a fixed 18rem column. */
+@media (max-width: 48rem) {
+  .isp-toast-region {
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    max-width: none;
+  }
+}

@@ -15,7 +15,9 @@ import {
 } from '@carbon/react'
 import { useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import ToastRegion from '@/components/common/ToastRegion/ToastRegion'
 import { useAuth } from '@/context/auth/useAuth'
+import { NotificationProvider } from '@/context/notification/NotificationProvider'
 import { useTheme } from '@/context/theme/useTheme'
 import { NAVIGATION, type NavigationItem } from '@/routes/navigation'
 
@@ -30,7 +32,7 @@ const Layout = () => {
   const isDark = theme === 'g100'
 
   return (
-    <>
+    <NotificationProvider>
       <Header aria-label="Interior Selling Price Application (ISP)">
         <SkipToContent />
         <HeaderMenuButton
@@ -102,7 +104,8 @@ const Layout = () => {
       >
         <Outlet />
       </Content>
-    </>
+      <ToastRegion />
+    </NotificationProvider>
   )
 }
 

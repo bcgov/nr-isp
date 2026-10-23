@@ -1,0 +1,10 @@
+/* Let selected-item tags use the full width of the selection box.
+   Carbon caps tags at 13rem (.cds--tag) and their inner content wrapper
+   at 12.5rem (.cds--interactive--tag-children), which truncates long names. */
+.multiselect-tags-container .cds--tag {
+  max-inline-size: 100%;
+}
+
+.multiselect-tags-container .cds--interactive--tag-children {
+  max-inline-size: 100%;
+}

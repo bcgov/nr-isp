@@ -12,6 +12,9 @@ export default defineConfig({
     setupFiles: 'src/test-setup.ts',
     // Parsing Carbon's CSS is slow and no test depends on it.
     css: false,
+    // Page tests render Carbon data tables several times; CI runners need more than the default
+    // 5 seconds.
+    testTimeout: 15000,
     coverage: {
       reporter: ['lcov', 'text-summary', 'text', 'json', 'html'],
       include: ['src/**/*.{ts,tsx}'],

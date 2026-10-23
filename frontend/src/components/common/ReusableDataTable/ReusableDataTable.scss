@@ -1,0 +1,158 @@
+// Shared maintenance-table layout. Colours come from Carbon tokens and the Table's zebra rows, so
+// both themes work without overrides.
+
+// Headers are always left-aligned (UI-ALIGN-3); cell alignment is set per cell.
+.left-aligned-header {
+  .cds--table-sort__flex {
+    justify-content: flex-start;
+  }
+
+  .cds--table-header-label {
+    text-align: left;
+  }
+}
+
+.reusable-table-container {
+  .cds--data-table {
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed;
+    overflow: visible;
+  }
+
+  // overflow: visible lets dropdown menus and date pickers open over the rows below.
+  .cds--data-table-container,
+  .cds--data-table tbody,
+  .cds--data-table tr {
+    overflow: visible;
+  }
+
+  .cds--data-table td {
+    box-sizing: border-box;
+    max-width: 0; // keeps each td to its table-layout: fixed column width
+    overflow: visible;
+    padding-block: 0.5rem;
+    padding-inline: 1rem 0.5rem;
+    overflow-wrap: break-word;
+    white-space: normal;
+  }
+
+  // The sort button fills the th, so pad the button rather than the th.
+  .cds--data-table th {
+    padding: 0;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  .cds--data-table th .cds--table-sort,
+  .cds--data-table th.cds--table-header-label {
+    width: 100%;
+    padding-block: 0.5rem;
+    padding-inline: 1rem 0.5rem;
+    text-align: left;
+  }
+
+  .cds--data-table th .cds--table-header-label {
+    display: block;
+    font-weight: 600;
+    line-height: 1.3;
+    text-align: left;
+    white-space: normal;
+  }
+
+  // Keeps the sort icon at the right edge of the header.
+  .cds--data-table th .cds--table-sort .cds--table-header-label {
+    flex: 1;
+  }
+
+  .cds--data-table th .cds--table-sort__icon,
+  .cds--data-table th .cds--table-sort__icon-unsorted {
+    width: 1rem;
+    min-width: 1rem;
+    height: 1rem;
+  }
+
+  // Editable fields fill their cell instead of keeping Carbon's fixed widths.
+  .cds--data-table td {
+    .cds--form-item,
+    .cds--text-input__field-wrapper,
+    .cds--text-input-wrapper,
+    .cds--text-input,
+    .cds--dropdown,
+    .cds--list-box,
+    .cds--list-box__wrapper,
+    .cds--date-picker,
+    .cds--date-picker-container,
+    .cds--date-picker-input__wrapper,
+    .cds--date-picker.cds--date-picker--single .cds--date-picker__input {
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      inline-size: 100%;
+    }
+
+    .cds--text-input,
+    .cds--date-picker__input {
+      padding-inline: 5px;
+      text-align: left;
+    }
+
+    .cds--list-box__label,
+    .cds--list-box__menu-item__option {
+      text-align: left;
+    }
+
+    // Pins the calendar icon to the top-right corner of a compact date input.
+    .cds--date-picker-input__wrapper .cds--date-picker__icon {
+      top: 0.25rem;
+      right: 0.25rem;
+      width: 0.875rem;
+      height: 0.875rem;
+      opacity: 0.45;
+      transform: none;
+    }
+  }
+
+  // Room below the table for menus opened from the last rows.
+  + .cds--pagination {
+    margin-bottom: 3rem;
+  }
+}
+
+// Menus in table cells use autoAlign, which portals them to <body>; keep them above the header
+// (8000) and modals (9000).
+.cds--autoalign,
+.cds--list-box__menu {
+  z-index: 9100 !important;
+}
+
+.reusable-table-container .cds--data-table td .flatpickr-calendar {
+  z-index: 9100;
+}
+
+@media (max-width: 1530px) {
+  .reusable-table-container .cds--data-table {
+    th,
+    td {
+      font-size: 0.75rem;
+    }
+  }
+}
+
+@media (max-width: 1200px) {
+  .reusable-table-container {
+    overflow-x: auto;
+
+    .cds--data-table {
+      min-width: 1350px;
+    }
+
+    .cds--data-table th,
+    .cds--data-table td {
+      font-size: revert;
+    }
+  }
+}
