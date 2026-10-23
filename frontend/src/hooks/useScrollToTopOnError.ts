@@ -65,8 +65,8 @@ export const useScrollToTopOnError = (
   // when the resulting message text is unchanged — e.g. saving the same invalid row twice
   // in a row. Text alone can't tell that apart from "this old error is still sitting here
   // and something unrelated re-rendered the page", so for object-shaped entries we track
-  // each one's own identity across renders as well: a fresh object means a fresh attempt,
-  // regardless of whether it produced the same words as last time.
+  // each one's own identity across renders as well: a fresh object carrying the same
+  // messages means a fresh attempt. A fresh object with fewer messages is a dismissal.
   const entryRefsRef = useRef<ErrorSource[]>(toEntries(source))
 
   useEffect(() => {
@@ -76,9 +76,10 @@ export const useScrollToTopOnError = (
       (entry, index) =>
         typeof entry === 'object' && entry !== null && entry !== entryRefsRef.current[index],
     )
-    const hasNewMessage =
-      messages.length > 0 &&
-      (anyEntryReplaced || messages.some((message) => !seenRef.current.has(message)))
+    const seen = seenRef.current
+    const hasUnseenMessage = messages.some((message) => !seen.has(message))
+    const isRetry = anyEntryReplaced && !hasUnseenMessage && new Set(messages).size === seen.size
+    const hasNewMessage = messages.length > 0 && (hasUnseenMessage || isRetry)
 
     seenRef.current = new Set(messages)
     entryRefsRef.current = entries

@@ -123,6 +123,18 @@ describe('validateNumericRange', () => {
     expect(validateNumericRange('abc', 'Volume')).toBe('Volume must be a valid number.')
   })
 
+  it('rejects a number followed by other characters, and an empty value', () => {
+    for (const value of ['12abc', '1.2.3', '1e3', '0x10', '', '  ']) {
+      expect(validateNumericRange(value, 'Volume')).toBe('Volume must be a valid number.')
+    }
+  })
+
+  it('accepts surrounding spaces and a leading or trailing decimal point', () => {
+    expect(validateNumericRange(' 12.5 ', 'Volume')).toBeNull()
+    expect(validateNumericRange('.5', 'Volume')).toBeNull()
+    expect(validateNumericRange('12.', 'Volume')).toBeNull()
+  })
+
   it('returns an error when outside the default range', () => {
     expect(validateNumericRange(-0.01, 'Volume')).toBe('Volume must be between 0.00 and 9999.99.')
     expect(validateNumericRange(10000, 'Volume')).toBe('Volume must be between 0.00 and 9999.99.')

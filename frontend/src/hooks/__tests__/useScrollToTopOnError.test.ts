@@ -75,6 +75,23 @@ describe('useScrollToTopOnError', () => {
     expect(scrollToSpy).toHaveBeenCalledTimes(2)
   })
 
+  it('does not scroll when one of several errors is dismissed', () => {
+    const { rerender } = render(null)
+    rerender({ source: { 'row-1': 'invalid volume', 'row-2': 'invalid date' } })
+    expect(scrollToSpy).toHaveBeenCalledTimes(1)
+
+    // Dismissing a banner replaces the map with one that has fewer messages.
+    rerender({ source: { 'row-1': null, 'row-2': 'invalid date' } })
+    expect(scrollToSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('scrolls when a replaced map swaps one message for a new one', () => {
+    const { rerender } = render(null)
+    rerender({ source: { 'row-1': 'invalid volume', 'row-2': 'invalid date' } })
+    rerender({ source: { 'row-1': null, 'row-2': 'invalid date', 'row-3': 'duplicate name' } })
+    expect(scrollToSpy).toHaveBeenCalledTimes(2)
+  })
+
   it('does not scroll when the identical map object re-renders', () => {
     const errors = { 'row-1': 'invalid volume' }
     const { rerender } = render(null)

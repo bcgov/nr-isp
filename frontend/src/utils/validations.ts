@@ -99,6 +99,12 @@ export const validateMinMax = (
   return null
 }
 
+/** A whole string such as "12", "-3.5" or ".5" as a number; NaN for anything else, e.g. "12abc". */
+const parseDecimal = (value: string): number => {
+  const trimmed = value.trim()
+  return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(trimmed) ? Number(trimmed) : Number.NaN
+}
+
 /**
  * Validates a volume/numeric field for range and decimal precision.
  * Returns an error message if validation fails, or null if valid.
@@ -110,7 +116,7 @@ export const validateNumericRange = (
   max: number = 9999.99,
   maxDecimalPlaces: number = 2,
 ): string | null => {
-  const num = typeof value === 'string' ? Number.parseFloat(value) : value
+  const num = typeof value === 'string' ? parseDecimal(value) : value
 
   if (Number.isNaN(num)) {
     return `${fieldName} must be a valid number.`
