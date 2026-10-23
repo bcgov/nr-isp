@@ -93,7 +93,7 @@ those levels. Before backend rollout, the environment's own values must be prese
 `loginproxy` realm. Missing PROD hostname or TLS inputs also fail before backend rollout. After applying a Route, the workflow verifies
 the expected hostname and frontend Service target and waits for router admission. This does not
 establish public DNS, certificate validity or a successful SSO round trip. The [deployment setup
-instructions](../README.md#deployments) list the required Environment settings, SSO registrations
+instructions](../README.md#deployments) list the required Environment settings
 and release recovery steps.
 
 Backend replicas scale on CPU with an HPA, roll one pod at a time, and drain gracefully before

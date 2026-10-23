@@ -37,9 +37,7 @@ prefers it over build-time `import.meta.env` values. Locally, put them in `.env`
 
 The container refuses to start without the issuer and client ID. The public SSO browser client uses
 authorization code and PKCE without a client secret. It must allow `<origin>` as a web origin and
-post-logout URI, and `<origin>/authCallback` as a redirect URI. In PROD these are
-`https://isp.nrs.gov.bc.ca` and `https://isp.nrs.gov.bc.ca/authCallback`; see the
-[SSO registration table](../README.md#sso-client-registration) for DEV slots, TEST and local origins.
+post-logout URI, and `<origin>/authCallback` as a redirect URI.
 
 ## Code layout
 

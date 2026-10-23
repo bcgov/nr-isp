@@ -159,39 +159,6 @@ everywhere and are exempt from the repository-level check.
 
 `sonar_token_backend` and `sonar_token_frontend` are optional repository secrets for SonarCloud.
 
-### SSO client registration
-
-Use a public browser client with authorization code and PKCE; the browser has no client secret.
-Backend and frontend use the same environment's `ISP_OIDC_ISSUER_URI` and `ISP_OIDC_CLIENT_ID`.
-Register these exact web origins, redirect URIs and post-logout URIs with the corresponding CSS
-client:
-
-| Environment | Web origin and post-logout URI | Redirect URI |
-|---|---|---|
-| DEV | `https://nr-isp-N.apps.gold.devops.gov.bc.ca` | `https://nr-isp-N.apps.gold.devops.gov.bc.ca/authCallback` |
-| TEST | `https://nr-isp-test.apps.gold.devops.gov.bc.ca` | `https://nr-isp-test.apps.gold.devops.gov.bc.ca/authCallback` |
-| PROD | `https://isp.nrs.gov.bc.ca` | `https://isp.nrs.gov.bc.ca/authCallback` |
-
-For DEV, replace `N` with each slot from `0` through `49`; a PR uses `PR % 50`. Grant the
-environment's users `ISP_ADMIN` or `ISP_APPROVER` through FAM. Register local origins separately,
-including `http://localhost:3005` if using the optional Caddy Compose service.
-
-Only one open preview can own a slot. If two PRs share a slot, the newer Route can be rejected;
-the deployment now fails its admission check instead of testing the other PR's preview.
-
-### PROD vanity setup
-
-Request DNS for `isp.nrs.gov.bc.ca` using the Gold ingress target confirmed by the platform team,
-and a TLS certificate covering that hostname. Store the certificate, matching private key and CA
-chain in the three PROD GitHub Environment secrets above; never commit them. The workflow passes
-the PEM values to the edge Route with deployer debug logging disabled. Certificate renewal updates
-these secrets and uses the manual PROD release workflow; it does not require an image rebuild.
-
-Missing PROD hostname or TLS inputs stop the deployment before the backend rolls out. After
-applying a Route, the workflow checks its hostname and frontend Service target and waits for router
-admission. Public DNS, the served certificate and the IDIR login/logout round trip still need
-verification at `https://isp.nrs.gov.bc.ca` before production acceptance.
-
 ## Component docs
 
 - [docs/architecture.md](docs/architecture.md) - runtime architecture, access rules and porting status.
