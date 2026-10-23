@@ -1,15 +1,154 @@
-// A custom theme for this app, see: https://getbootstrap.com/docs/5.3/customize/sass/#maps-and-loops
-$primary: #ffffff;
-$secondary: #385a8a;
-$success: #234720;
-$warning: #81692c;
-$danger: #712024;
+@use '@carbon/react/scss/config' with (
+  $css--font-face: false
+);
+@use '@carbon/react/scss/themes';
+@use '@carbon/react/scss/theme' with (
+  $fallback: themes.$white,
+  $theme: themes.$white
+);
+@use '@carbon/react';
 
-// Import Bootstrap and Bootstrap Icons
-@import '../../node_modules/bootstrap/scss/bootstrap';
-$bootstrap-icons-font-src:
-  url('../../node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff2')
-    format('woff2'),
-  url('../../node_modules/bootstrap-icons/font/fonts/bootstrap-icons.woff')
-    format('woff');
-@import '../../node_modules/bootstrap-icons/font/bootstrap-icons.scss';
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-weight: normal;
+  src:
+    url('/fonts/2023_01_01_BCSans-Regular_2f.woff2') format('woff2'),
+    url('/fonts/2023_01_01_BCSans-Regular_2f.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-style: italic;
+  font-weight: normal;
+  src:
+    url('/fonts/2023_01_01_BCSans-Italic_2f.woff2') format('woff2'),
+    url('/fonts/2023_01_01_BCSans-Italic_2f.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-weight: bold;
+  src:
+    url('/fonts/2023_01_01_BCSans-Bold_2f.woff2') format('woff2'),
+    url('/fonts/2023_01_01_BCSans-Bold_2f.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-style: italic;
+  font-weight: bold;
+  src:
+    url('/fonts/2023_01_01_BCSans-BoldItalic_2f.woff2') format('woff2'),
+    url('/fonts/2023_01_01_BCSans-BoldItalic_2f.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-weight: light;
+  src:
+    url('/fonts/2023_03_14_BCSans-Light_2g.woff2') format('woff2'),
+    url('/fonts/2023_03_14_BCSans-Light_2g.woff') format('woff');
+}
+
+@font-face {
+  font-family: 'BC Sans';
+  font-display: swap;
+  font-style: italic;
+  font-weight: light;
+  src:
+    url('/fonts/2023_01_01_BCSans-LightItalic_2f.woff2') format('woff2'),
+    url('/fonts/2023_01_01_BCSans-LightItalic_2f.woff') format('woff');
+}
+
+body {
+  font-family: 'BC Sans', 'Noto Sans', Verdana, Arial, sans-serif;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+}
+
+// Carbon's UI shell is fixed-position; offset content by the header and the expanded side nav.
+.isp-content {
+  min-height: 100vh;
+  padding: 4rem 2rem 2rem;
+  transition: margin-left 110ms;
+}
+
+@media (min-width: 66rem) {
+  .isp-content--nav-expanded {
+    margin-left: 16rem;
+  }
+}
+
+.isp-header__user {
+  align-self: center;
+  margin-inline-end: 1rem;
+  color: var(--cds-text-on-color, #fff);
+  font-size: 0.875rem;
+}
+
+.isp-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 64rem;
+
+  h1 {
+    font-size: 2rem;
+    line-height: 1.25;
+  }
+}
+
+.isp-page__lead {
+  color: var(--cds-text-secondary);
+}
+
+.isp-summary {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.75rem 2rem;
+  align-items: center;
+
+  dt {
+    font-weight: 600;
+  }
+}
+
+.isp-landing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.5rem;
+  max-width: 40rem;
+  min-height: 100vh;
+  padding: 4rem 2.5rem;
+}
+
+.isp-landing__logo {
+  width: 10rem;
+}
+
+.isp-landing__title {
+  font-size: 2.625rem;
+  line-height: 1.2;
+}
+
+.isp-landing__subtitle {
+  margin-top: -1rem;
+  color: var(--cds-text-secondary);
+  font-size: 1.25rem;
+}
+
+.isp-landing__description,
+.isp-landing__help {
+  color: var(--cds-text-secondary);
+}
+
+.isp-landing__actions {
+  display: flex;
+  gap: 1rem;
+}

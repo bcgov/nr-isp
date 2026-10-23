@@ -1,0 +1,7 @@
+isp:
+  auth:
+    oidc:
+      # Never contacted: tests authenticate with spring-security-test JWTs or call the decoder's
+      # validators directly.
+      issuer-uri: https://sso.example.test/auth/realms/standard
+      client-id: isp-test-client

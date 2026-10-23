@@ -11,14 +11,37 @@ concurrency:
 permissions: {}
 
 jobs:
-  validate:
-    name: Validate Results
-    if: (! github.event.pull_request.draft)
+  vars:
+    name: Variables
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      pull-requests: read
+    outputs:
+      slot: ${{ steps.calc.outputs.slot }}
     steps:
-      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: calc
+        run: |
+          slot=$(( ${{ github.event.number }} % 50 ))
+          echo "slot=${slot}" >> "$GITHUB_OUTPUT"
+
+  validate:
+    name: Validate PR
+    if: >-
+      !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: [vars]
+    permissions:
+      pull-requests: write
+    uses: bcgov/quickstart-openshift-helpers/.github/workflows/.pr-validate.yml@ca6579bdadf383a2513397081f963889b92823a4 # v1.1.0
+    with:
+      markdown_links: |
+        - [Frontend](https://${{ github.event.repository.name }}-${{ needs.vars.outputs.slot }}.apps.gold.devops.gov.bc.ca)
+        - [Backend](https://${{ github.event.repository.name }}-${{ needs.vars.outputs.slot }}.apps.gold.devops.gov.bc.ca/api)
+
+  results:
+    name: Validate Results
+    if: always()
+    needs: [validate]
+    runs-on: ubuntu-slim
+    steps:
+      - uses: bcgov/actions/workflow-results@79aefe3a7abb2d0d00b1b3ea4cfbf12727a10638 # v0.9.0
+        with:
+          needs: ${{ toJson(needs) }}
