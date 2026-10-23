@@ -88,7 +88,7 @@ Mill names (`/mills`) is the first ported page and the pattern for the rest.
 | Repository | `@Repository @Profile("oracle")`, `NamedParameterJdbcTemplate`, SQL and row mapping in one class that returns the DTO records; no entities or mappers. |
 | Errors | `ApiExceptionHandler` returns validation failures, business rules and database constraint violations as a 400 with a plain-text message, which the page shows as-is (as the CGI rebuild's `GlobalExceptionHandler` did). Anything else keeps Spring Boot's JSON error body. |
 | Tests | Repositories run their SQL against H2 in Oracle mode (`db/isp-schema.sql`); services use Mockito; controllers use MockMvc with a mocked service; `MillsEndToEndTest` runs the `oracle` wiring against H2. `SecurityConfigurationTest` owns the role rules. |
-| Frontend | A page under `src/pages`, an API client in `src/service` built on `apiFetch`, and the CGI rebuild's shared components under `src/components/common`. |
+| Frontend | A page under `src/pages`, lazy-loaded from `PAGES` in `AppRoutes.tsx`; an API client in `src/service` built on `apiFetch`; and the CGI rebuild's shared components under `src/components/common`. |
 
 The CGI rebuild generated Spring interfaces and DTOs from an OpenAPI spec. They are not carried
 over: hand-written records are shorter than the generated models, need no build-time generation

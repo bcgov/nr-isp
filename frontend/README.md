@@ -57,7 +57,8 @@ post-logout URI, and `<origin>/authCallback` as a redirect URI.
 | `src/scss/` | Global styles; `_forms.scss` holds the shared "Add New Row" layout |
 
 To port a page, add it under `src/pages/` and register it in `PAGES` in `src/routes/AppRoutes.tsx`
-under its navigation path; it then replaces the `NotPorted` placeholder. `src/pages/Mills` is the
+under its navigation path, imported with `lazy()` so it loads as its own chunk; it then replaces
+the `NotPorted` placeholder. `src/pages/Mills` is the
 worked example: its API client calls `apiFetch`, `useAuth().isAdmin` replaces the CGI rebuild's
 `canWrite`, and styles use Carbon tokens so both themes work. Port a shared component from the CGI
 rebuild's `src/components/common` with its tests when the first page needs it.
