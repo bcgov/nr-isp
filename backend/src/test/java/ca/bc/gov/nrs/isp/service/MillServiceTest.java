@@ -142,8 +142,8 @@ class MillServiceTest {
     when(millRepository.deleteById(1)).thenReturn(1);
     when(millRepository.deleteById(999)).thenReturn(0);
 
-    assertThat(service.deleteMill(1)).isTrue();
-    assertThat(service.deleteMill(999)).isFalse();
+    assertThat(service.deleteMill(1, "JSMITH")).isTrue();
+    assertThat(service.deleteMill(999, "JSMITH")).isFalse();
   }
 
   @Test

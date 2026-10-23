@@ -52,8 +52,10 @@ public class MillController {
   }
 
   @DeleteMapping("/{millId}")
-  public ResponseEntity<Void> deleteMill(@PathVariable long millId) {
-    return require(millService).deleteMill(millId)
+  public ResponseEntity<Void> deleteMill(
+      @PathVariable long millId, JwtAuthenticationToken authentication) {
+    String username = IspUser.from(authentication).requiredUsername();
+    return require(millService).deleteMill(millId, username)
         ? ResponseEntity.noContent().build()
         : ResponseEntity.notFound().build();
   }

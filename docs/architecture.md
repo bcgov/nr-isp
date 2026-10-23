@@ -82,7 +82,7 @@ Mill names (`/mills`) is the first ported page and the pattern for the rest.
 
 | Layer | Pattern |
 |---|---|
-| Controller | `@RestController` mapped without `/api`, keeping the CGI rebuild's paths. It takes an `ObjectProvider` for each service and calls `OracleServices.require`, so without the `oracle` profile the API still starts and the endpoint answers 503. |
+| Controller | `@RestController` mapped without `/api`, keeping the CGI rebuild's paths. It takes an `ObjectProvider` for each service and calls `OracleServices.require`, so without the `oracle` profile the API still starts and the endpoint answers 503. Every write, deletes included, takes `IspUser.from(authentication).requiredUsername()` and passes it to the service. |
 | DTOs | Hand-written records in `dto`, with Jakarta validation matching the CGI rebuild's OpenAPI schemas and the column lengths. JSON field names and date formats are unchanged. |
 | Service | `@Service @Profile("oracle")` holding the business rules, `@Transactional`. Rejected input throws `ValidationConstraintViolationException`. |
 | Repository | `@Repository @Profile("oracle")`, `NamedParameterJdbcTemplate`, SQL and row mapping in one class that returns the DTO records; no entities or mappers. |

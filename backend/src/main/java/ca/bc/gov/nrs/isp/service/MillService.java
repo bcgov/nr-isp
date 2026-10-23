@@ -111,12 +111,17 @@ public class MillService {
     return new SavedMill(reload(newMill), false);
   }
 
-  /** Returns false when no mill has the ID. */
+  /**
+   * Returns false when no mill has the ID. {@code MILL_AUDIT} records inserts and updates only,
+   * so the log line is the record of who deleted a mill.
+   *
+   * @param username IDIR username of the user deleting the mill
+   */
   @Transactional
-  public boolean deleteMill(long millId) {
+  public boolean deleteMill(long millId, String username) {
     boolean deleted = millRepository.deleteById(millId) > 0;
     if (deleted) {
-      log.info("Deleted mill ID {}", millId);
+      log.info("Deleted mill ID {} for {}", millId, username);
     }
     return deleted;
   }

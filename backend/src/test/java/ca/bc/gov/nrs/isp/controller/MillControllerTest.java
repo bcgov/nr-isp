@@ -1,6 +1,7 @@
 package ca.bc.gov.nrs.isp.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -161,7 +162,7 @@ class MillControllerTest {
 
   @Test
   void returnsTheDatabaseReasonWhenAConstraintRefusesTheChange() throws Exception {
-    when(millService.deleteMill(1))
+    when(millService.deleteMill(1, "JSMITH"))
         .thenThrow(
             new DataIntegrityViolationException(
                 "PreparedStatementCallback; SQL [DELETE FROM MILL]",
@@ -191,15 +192,27 @@ class MillControllerTest {
   }
 
   @Test
+  void refusesADeleteWithoutAnIdirUsername() throws Exception {
+    mvc.perform(
+            delete("/api/mills/1")
+                .with(
+                    jwt()
+                        .jwt(token -> token.claim("identity_provider", "idir"))
+                        .authorities(new SimpleGrantedAuthority(IspRoles.ISP_ADMIN))))
+        .andExpect(status().isUnauthorized());
+    verify(millService, never()).deleteMill(anyLong(), anyString());
+  }
+
+  @Test
   void deletesAMill() throws Exception {
-    when(millService.deleteMill(1)).thenReturn(true);
+    when(millService.deleteMill(1, "JSMITH")).thenReturn(true);
 
     mvc.perform(delete("/api/mills/1").with(admin())).andExpect(status().isNoContent());
   }
 
   @Test
   void answersNotFoundForAMissingMill() throws Exception {
-    when(millService.deleteMill(999)).thenReturn(false);
+    when(millService.deleteMill(999, "JSMITH")).thenReturn(false);
 
     mvc.perform(delete("/api/mills/999").with(admin())).andExpect(status().isNotFound());
   }
