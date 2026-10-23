@@ -3,8 +3,6 @@
 .wt-*/
 
 ### Generated ###
-# Created by https://www.toptal.com/developers/gitignore/api/node,java,python,go
-# Edit at https://www.toptal.com/developers/gitignore?templates=node,java,python,go
 
 ### Go ###
 # If you prefer the allow list template instead of the deny list, see community template:
@@ -368,7 +366,6 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
-# End of https://www.toptal.com/developers/gitignore/api/node,java,python,go
 .idea
 *.key
 *.pem
