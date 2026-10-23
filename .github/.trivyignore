@@ -28,3 +28,15 @@ KSV-0013
 # Retain this suppression unless a distinct, confirmed Undertow issue needs
 # review.
 CVE-2026-3260
+
+# CVE-2026-47884 (XsltView path limitation) and CVE-2026-47890 (SSE stream corruption with view
+# fragments): Spring Framework 6.2.19, as managed by Spring Boot 3.5.16.
+#
+# The fix is only in Spring Framework 7.0.9+ (Spring Boot 4); 6.2.19 is the newest 6.2.x on Maven
+# Central. Neither is reachable here: the backend is a JSON REST API with no XsltView, XSLT
+# templates, view resolvers, SseEmitter or view-fragment rendering (checked 2026-10-23).
+#
+# Remove these suppressions with the Spring Boot 4 upgrade, or sooner if the backend adds XSLT
+# views or Server-Sent Events.
+CVE-2026-47884
+CVE-2026-47890
