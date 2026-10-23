@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Mill names maintenance, with the CGI rebuild's {@code MillsApi} paths and bodies. */
+/** Mill names maintenance: list, create or update, delete and export mills. */
 @RestController
 @RequestMapping("/mills")
 public class MillController {

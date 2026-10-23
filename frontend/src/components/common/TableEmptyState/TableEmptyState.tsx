@@ -3,7 +3,7 @@ import './TableEmptyState.scss'
 
 export type TableStateType = 'initial' | 'no-results' | 'error'
 
-// The CGI rebuild used Carbon pictograms here; icons avoid a second Carbon icon package.
+// Icons rather than Carbon pictograms, which would need a second Carbon icon package.
 const config: Record<TableStateType, { label: string; description: string; Icon: CarbonIconType }> =
   {
     initial: {

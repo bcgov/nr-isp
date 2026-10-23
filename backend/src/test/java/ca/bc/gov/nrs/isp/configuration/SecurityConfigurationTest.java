@@ -26,9 +26,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultMatcher;
 
 /**
- * Request rules ported from the CGI rebuild (bcgov-c/nr-isp). {@link #passesSecurity()} accepts
- * whatever the handler answered (404 for an endpoint not ported yet, 503 without Oracle, 400 for an
- * empty body); a 401 or 403 means a rule refused the request.
+ * The API's request rules. {@link #passesSecurity()} accepts whatever the handler answered (404
+ * for an endpoint not ported yet, 503 without Oracle, 400 for an empty body); a 401 or 403 means a
+ * rule refused the request.
  */
 @SpringBootTest
 @AutoConfigureMockMvc

@@ -73,8 +73,8 @@ columns (`entry_userid`, `update_userid`) take the IDIR username from the token
 (`IspUser.requiredUsername()`); a write from a token without one is refused with a 401.
 
 Oracle `DATE` columns hold B.C. wall-clock time. The API returns timestamps with the JVM's offset
-(`TZ=America/Vancouver`), for example `2024-03-04T10:00:00-08:00`; the CGI rebuild labelled the
-same wall-clock values UTC.
+(`TZ=America/Vancouver`), for example `2024-03-04T10:00:00-08:00`, so they name the instant they
+were written.
 
 ## Porting pattern
 
@@ -86,7 +86,7 @@ Mill names (`/mills`) is the first ported page and the pattern for the rest.
 | DTOs | Hand-written records in `dto`, with Jakarta validation matching the CGI rebuild's OpenAPI schemas and the column lengths. JSON field names and date formats are unchanged. |
 | Service | `@Service @Profile("oracle")` holding the business rules, `@Transactional`. Rejected input throws `ValidationConstraintViolationException`. |
 | Repository | `@Repository @Profile("oracle")`, `NamedParameterJdbcTemplate`, SQL and row mapping in one class that returns the DTO records; no entities or mappers. |
-| Errors | `ApiExceptionHandler` returns validation failures, business rules and database constraint violations as a 400 with a plain-text message, which the page shows as-is (as the CGI rebuild's `GlobalExceptionHandler` did). Anything else keeps Spring Boot's JSON error body. |
+| Errors | `ApiExceptionHandler` returns validation failures, business rules and database constraint violations as a 400 with a plain-text message, which the page shows as-is. Anything else keeps Spring Boot's JSON error body. |
 | Tests | Repositories run their SQL against H2 in Oracle mode (`db/isp-schema.sql`); services use Mockito; controllers use MockMvc with a mocked service; `MillsEndToEndTest` runs the `oracle` wiring against H2. `SecurityConfigurationTest` owns the role rules. |
 | Frontend | A page under `src/pages`, lazy-loaded from `PAGES` in `AppRoutes.tsx`; an API client in `src/service` built on `apiFetch`; and the CGI rebuild's shared components under `src/components/common`. |
 

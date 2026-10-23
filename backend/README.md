@@ -57,7 +57,7 @@ The API refuses to start without the SSO issuer and client ID, so it never runs 
 | `configuration` | `/api` prefix, security rules and CORS, Oracle datasource checks, settings records |
 | `security` | Token validation, FAM role mapping, `IspRoles`, `IspUser` |
 | `controller` | REST controllers. Map them without `/api`; `ApiPathConfiguration` adds it. `ApiExceptionHandler` turns rejected input into plain-text 400s. |
-| `dto` | Request and response records, with the CGI rebuild's JSON field names |
+| `dto` | Request and response records |
 | `service` | Business rules, `@Profile("oracle")` |
 | `repository` | `NamedParameterJdbcTemplate` and SQL, `@Profile("oracle")` |
 | `exception` | `ValidationConstraintViolationException` for business-rule failures |

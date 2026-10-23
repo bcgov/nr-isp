@@ -18,7 +18,7 @@ const MAX_TOASTS = 4
 let toastSequence = 0
 const nextToastId = (): string => `isp-toast-${++toastSequence}`
 
-/** Action confirmations shown by ToastRegion, ported from the CGI rebuild. */
+/** Action confirmations, shown by ToastRegion. */
 export const NotificationProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<Toast[]>([])
 

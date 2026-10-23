@@ -51,9 +51,9 @@ post-logout URI, and `<origin>/authCallback` as a redirect URI.
 | `src/routes/AppRoutes.tsx` | Signed-out, no-access, error and signed-in route sets |
 | `src/pages/` | One folder per page; `NotPorted` stands in for pages still to port |
 | `src/components/Layout.tsx` | Carbon header, side navigation, theme toggle, logout and action toasts |
-| `src/components/common/` | Components shared by the CGI rebuild's pages (`ReusableDataTable`, `MultiSelectWithTags`, `PageNotifications`...), at the same paths as there |
+| `src/components/common/` | Components shared by the maintenance pages (`ReusableDataTable`, `MultiSelectWithTags`, `PageNotifications`...) |
 | `src/context/notification/` | Toasts confirming completed actions (`useNotifications().notifySuccess`) |
-| `src/hooks/`, `src/utils/` | The CGI rebuild's shared hooks and helpers |
+| `src/hooks/`, `src/utils/` | Shared hooks and helpers |
 | `src/scss/` | Global styles; `_forms.scss` holds the shared "Add New Row" layout |
 
 To port a page, add it under `src/pages/` and register it in `PAGES` in `src/routes/AppRoutes.tsx`

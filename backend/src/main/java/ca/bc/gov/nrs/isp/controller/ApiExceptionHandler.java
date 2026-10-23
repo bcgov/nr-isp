@@ -14,9 +14,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Turns rejected input into a 400 with a plain-text message the page shows as-is, as the CGI
- * rebuild's {@code GlobalExceptionHandler} did. Other failures keep Spring Boot's JSON error body,
- * which never includes the exception message.
+ * Turns rejected input into a 400 with a plain-text message the page can show as-is. Other
+ * failures keep Spring Boot's JSON error body, which never includes the exception message.
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -48,7 +47,7 @@ public class ApiExceptionHandler {
 
   /**
    * A database constraint refused the change, for example deleting a mill that has reports. The
-   * Oracle message names the constraint, which is how the CGI rebuild reported it too.
+   * Oracle message names the constraint that refused it.
    */
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<String> dataIntegrity(DataIntegrityViolationException exception) {

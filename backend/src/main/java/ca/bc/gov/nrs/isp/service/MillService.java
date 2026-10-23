@@ -24,12 +24,15 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Mill names maintenance, ported from the CGI rebuild's {@code MillServiceImpl}. */
+/**
+ * Mill names maintenance. Saving looks a mill up by its mill number, so one call creates or
+ * updates it.
+ */
 @Service
 @Profile("oracle")
 public class MillService {
 
-  /** Expiry given to every new mill, as in the CGI rebuild and the column default. */
+  /** Expiry given to every new mill, matching the column default. */
   static final LocalDate OPEN_EXPIRY_DATE = LocalDate.of(9999, 12, 31);
 
   private static final Logger log = LoggerFactory.getLogger(MillService.class);
@@ -211,7 +214,7 @@ public class MillService {
         null);
   }
 
-  /** RFC 4180 field. The CGI rebuild left some columns unquoted, so a comma shifted the row. */
+  /** An RFC 4180 field: quoted, with quotes doubled, so commas and quotes stay in their column. */
   private static String quoted(String value) {
     return value == null ? "\"\"" : "\"" + value.replace("\"", "\"\"") + "\"";
   }

@@ -62,7 +62,7 @@ export const readErrorMessage = async (response: Response, fallback: string): Pr
 
 /**
  * Downloads a file from the API. A plain link cannot send the bearer token, so the file is fetched
- * and handed to the browser as an object URL, as the CGI rebuild's exports did.
+ * and handed to the browser as an object URL.
  */
 export const apiDownload = async (path: string, fileName: string): Promise<void> => {
   const response = await apiFetch(path, { headers: { Accept: '*/*' } })

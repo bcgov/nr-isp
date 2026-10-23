@@ -11,7 +11,7 @@ import java.time.ZoneId;
 /**
  * Reads Oracle {@code DATE} columns, which hold B.C. wall-clock time with no zone. Timestamps take
  * the JVM's zone ({@code TZ=America/Vancouver} when deployed), the zone the database writes them
- * in. The CGI rebuild labelled the same wall-clock values UTC.
+ * in, so the API reports the instant they were written.
  */
 final class OracleDates {
 

@@ -76,7 +76,7 @@
       <version>${ojdbc.version}</version>
     </dependency>
     <dependency>
-      <!-- Table exports as PDF. LGPL/MPL, unlike the AGPL iText 7 the CGI rebuild used. -->
+      <!-- Table exports as PDF. LGPL/MPL licensed, where iText 7 is AGPL. -->
       <groupId>com.github.librepdf</groupId>
       <artifactId>openpdf</artifactId>
       <version>${openpdf.version}</version>

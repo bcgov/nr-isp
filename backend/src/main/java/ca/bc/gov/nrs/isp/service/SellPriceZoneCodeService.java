@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 /**
- * ISP sell price zones. The CGI rebuild cached this list; caching waits for the reference-data
- * cache that will serve every code table.
+ * ISP sell price zones, read from Oracle on each call until a shared reference-data cache serves
+ * the code tables.
  */
 @Service
 @Profile("oracle")

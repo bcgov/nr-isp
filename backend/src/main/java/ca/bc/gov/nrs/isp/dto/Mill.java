@@ -3,7 +3,7 @@ package ca.bc.gov.nrs.isp.dto;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
-/** A row of the {@code MILL} table, as the CGI rebuild's {@code Mill} schema returned it. */
+/** A row of the {@code MILL} table. */
 public record Mill(
     long millId,
     long millNumber,

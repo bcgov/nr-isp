@@ -147,7 +147,7 @@ class MillServiceTest {
   }
 
   @Test
-  void exportsQuotedCsvWithTheCgiRebuildColumns() {
+  void exportsCsvWithEveryTextFieldQuoted() {
     Mill quoted =
         new Mill(
             1, 100, "Mill \"A\", Ltd", null, "00012345", "01", EFFECTIVE,

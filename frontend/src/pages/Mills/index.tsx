@@ -115,7 +115,7 @@ const RequiredLabel = ({ children }: { children: ReactNode }) => (
   </strong>
 )
 
-/** Mill names maintenance, ported from the CGI rebuild's MillsPage. */
+/** Mill names maintenance: search, add, edit, delete and export mills. */
 const MillsPage = () => {
   const { isAdmin: canWrite } = useAuth()
   const [mills, setMills] = useState<MillModel[]>([])

@@ -1,5 +1,5 @@
--- ISP tables used by repository tests, run on H2 in Oracle mode. Column definitions follow the
--- CGI rebuild's ISP_DDLS_TAB.sql; CLIENT_LOCATION stands in for the Forest Client synonym.
+-- ISP tables used by repository tests, run on H2 in Oracle mode. Column definitions match the ISP
+-- Oracle schema; CLIENT_LOCATION stands in for the Forest Client synonym.
 
 CREATE TABLE ISP_SELL_PRICE_ZONE_CODE
  (ISP_SELL_PRICE_ZONE_CODE VARCHAR2(2) NOT NULL PRIMARY KEY
