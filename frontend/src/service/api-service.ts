@@ -1,7 +1,7 @@
 import { notifySessionExpired } from '@/context/auth/session-events'
 import { getOidcUser, isSessionEnded } from '@/service/oidc-service'
 
-export const API_BASE = '/api'
+const API_BASE = '/api'
 
 export class ApiError extends Error {
   readonly status: number
