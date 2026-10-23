@@ -61,7 +61,7 @@
       <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
     </dependency>
     <dependency>
-      <!-- Repositories use NamedParameterJdbcTemplate and hand-written SQL, as legacy ISP does; no JPA. -->
+      <!-- Repositories use NamedParameterJdbcTemplate and hand-written SQL, as the CGI rebuild does; no JPA. -->
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-jdbc</artifactId>
     </dependency>

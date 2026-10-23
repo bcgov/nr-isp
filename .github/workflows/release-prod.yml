@@ -82,6 +82,10 @@ jobs:
       backend_memory_request: "768Mi"
       backend_cpu_limit: "1000m"
       backend_memory_limit: "1536Mi"
+      frontend_cpu_request: "100m"
+      frontend_memory_request: "128Mi"
+      frontend_cpu_limit: "500m"
+      frontend_memory_limit: "256Mi"
 
   # Sync Sysdig email alerts for PROD. No-ops cleanly if SYSDIG_API_TOKEN is
   # unset; alert templates live in monitoring/alerts/.

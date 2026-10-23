@@ -42,7 +42,7 @@
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitest/coverage-v8": "^4.0.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.2.3",
@@ -50,7 +50,7 @@
     "prettier": "^3.5.3",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.58.2",
-    "vitest": "^4.0.0"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "source-map-js": "^1.2.2"
